@@ -20,17 +20,30 @@ export type RequestSummary = {
   status: string;
   tier: string;
   visibility: string;
+  paymentStatus: string;
+  revisionState: string;
+  moderationFlag: boolean;
+  moderationNote: string | null;
+  priceKobo: number | null;
   upvoteCount: number;
   createdAt: string;
   fulfilledAt: string | null;
+  deliveryConfirmedAt: string | null;
   ownerId: string;
   ownerName: string | null;
+  ownerEmail: string | null;
+  priorityFlag: number;
   hasLesson: boolean;
   lessonTitle: string | null;
   videoId: string | null;
   videoLength: string | null;
   viewerUpvoted: boolean;
   replyCount: number;
+};
+
+export type AdminQueueItem = RequestSummary & {
+  ageDays: number;
+  internalNoteCount: number;
 };
 
 export type LessonSummary = {
@@ -72,13 +85,4 @@ export type NotificationRow = {
   readAt: string | null;
   createdAt: string;
   kind: string;
-};
-
-export type AdminQueueItem = RequestSummary & {
-  priorityFlag: number;
-  ageDays: number;
-  replyCount: number;
-  internalNoteCount: number;
-  paymentStatus: string;
-  ownerEmail: string | null;
 };

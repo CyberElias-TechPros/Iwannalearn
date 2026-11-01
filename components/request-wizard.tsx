@@ -64,10 +64,12 @@ export function RequestWizard({
   signedIn,
   initialTitle = "",
   initialCategory = "",
+  initialTier = "community",
 }: {
   signedIn: boolean;
   initialTitle?: string;
   initialCategory?: string;
+  initialTier?: "community" | "priority" | "private";
 }) {
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Values>({
@@ -76,7 +78,7 @@ export function RequestWizard({
     tried: "",
     category: initialCategory || "",
     level: "new",
-    tier: "community",
+    tier: initialTier,
     contextLink: "",
     deadline: "",
   });
@@ -441,7 +443,7 @@ export function RequestWizard({
                         )}
                         {tier !== "community" && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-medium text-ink-3">
-                            <Lock size={10} /> Not charged yet
+                            <Lock size={10} /> Pay later
                           </span>
                         )}
                       </span>
@@ -454,9 +456,9 @@ export function RequestWizard({
 
               {values.tier !== "community" && (
                 <div className="mt-4 rounded-xl border border-accent/25 bg-accent-soft/60 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
-                  <strong className="font-semibold">Payment isn&apos;t switched on yet.</strong> Send the request now and
-                  we&apos;ll email you the exact price and scope before anything is charged. Nothing happens until you
-                  say yes.
+                  <strong className="font-semibold">Nothing is charged now.</strong> Send the request first — the exact
+                  price, scope and revision window appear on your request page, and you pay only when you&apos;re ready.
+                  Declines are never charged.
                 </div>
               )}
 

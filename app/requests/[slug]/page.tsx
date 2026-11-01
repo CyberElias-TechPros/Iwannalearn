@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
-import { getRequestBySlug, getRequestExtras, getViewerFeedback, similarRequests } from "@/lib/queries";
+import { getRequestBySlug, getRequestExtras, getViewerFeedback, hasEntitlement, similarRequests } from "@/lib/queries";
+import { summaryForRequest } from "@/lib/payments";
+import { paymentsEnabled, type PaidTier } from "@/lib/pricing";
+import { PaymentPanel } from "@/components/payment-panel";
+import { DeliveryActions } from "@/components/delivery-actions";
+import { CancelRequest } from "@/components/cancel-request";
+import { signAccess } from "@/lib/signed-url";
 import { StatusPill } from "@/components/status-pill";
 import { StatusTimeline } from "@/components/status-timeline";
 import { UpvoteButton } from "@/components/upvote-button";
@@ -12,8 +18,9 @@ import { FeedbackPrompt } from "@/components/feedback-prompt";
 import { RequestCard } from "@/components/request-card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { ArrowRight, Bell, Calendar, Check, Clock, Globe, Link as LinkIcon, Lock, Plus, Sparkle } from "@/components/icons";
+import { Alert, ArrowRight, Bell, Calendar, Check, Clock, Globe, Link as LinkIcon, Lock, Plus, Receipt, Sparkle } from "@/components/icons";
 import { levelLabel, plural, relativeTime, statusMeta, tierMeta } from "@/lib/status";
+import { getSetting } from "@/lib/service";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -27,7 +34,7 @@ export default async function RequestPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{ new?: string; paid?: string }>;
 }) {
   const { slug } = await params;
   const query = await searchParams;
@@ -46,6 +53,14 @@ export default async function RequestPage({
   const meta = statusMeta(request.status);
   const tier = tierMeta(request.tier);
   const justCreated = query.new === "1";
+  const justPaid = query.paid === "1";
+  const paidTier: PaidTier | null = request.tier === "private" || request.tier === "priority" ? request.tier : null;
+  const payment = paidTier ? summaryForRequest(request.id) : null;
+  const entitled = hasEntitlement(user?.id, request.id);
+  const paymentsOn = paymentsEnabled();
+  const revisionWindow = Number(getSetting("refund_window_days", "7"));
+  const entitledForViewer = user ? hasEntitlement(user.id, request.id) || isCreator : false;
+  const privateLink = user && entitledForViewer ? signAccess(request.id, user.id) : null;
   const visibleEvents = events.filter((event) => isCreator || event.kind !== "note");
   const lessonReplies = replies.filter((reply) => reply.videoId);
 
@@ -84,6 +99,39 @@ export default async function RequestPage({
                 </ButtonLink>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {justPaid && (
+        <div className="rise-in mt-5 flex flex-col gap-3 rounded-2xl border border-brand/25 bg-brand-soft/70 p-5 sm:flex-row sm:items-start">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+            <Receipt size={19} />
+          </span>
+          <div>
+            <h2 className="text-[18px] font-semibold text-brand-strong">Payment confirmed</h2>
+            <p className="mt-1 text-[14px] leading-relaxed text-ink-2">
+              Your receipt is in your email and in the in-app bell. Work starts now — the status on this page is the
+              single source of truth while it&apos;s being made.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {request.moderationFlag && (isOwner || isCreator) && (
+        <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-warn/30 bg-warn-soft/60 p-4 sm:flex-row sm:items-start">
+          <Alert size={17} className="mt-0.5 shrink-0 text-warn" />
+          <div>
+            <p className="text-[13.5px] font-semibold text-warn">
+              {isCreator ? "Flagged for moderation" : "This one needs a quick check"}
+            </p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-ink-2">
+              {request.moderationNote ??
+                "It touches a topic on our not-covered list. We'll review it against the policy before filming — you'll get a straight answer either way."}
+            </p>
+            <Link href="/legal/not-covered" className="mt-1 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-brand hover:underline">
+              What we don&apos;t cover <ArrowRight size={13} />
+            </Link>
           </div>
         </div>
       )}
@@ -192,6 +240,58 @@ export default async function RequestPage({
             </dl>
           </section>
 
+          {paidTier && (isOwner || isCreator) && (
+            <section className="surface p-5" aria-labelledby="payment-heading">
+              <div className="flex items-center justify-between gap-2">
+                <h2 id="payment-heading" className="text-[15px] font-semibold">
+                  {paidTier === "private" ? "Private commission" : "Priority slot"}
+                </h2>
+                {payment?.status === "paid" ? (
+                  <Badge tone="success" dot>
+                    Paid
+                  </Badge>
+                ) : (
+                  <Badge tone="accent">Payment pending</Badge>
+                )}
+              </div>
+
+              {isOwner ? (
+                <div className="mt-3">
+                  <PaymentPanel
+                    requestId={request.id}
+                    tier={paidTier}
+                    amountLabel={payment?.label ?? tierMeta(request.tier).price}
+                    paymentStatus={payment?.status ?? "none"}
+                    enabled={paymentsOn}
+                    reference={payment?.reference ?? null}
+                    revisionState={request.revisionState}
+                  />
+                </div>
+              ) : (
+                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+                  {payment?.status === "paid"
+                    ? `Paid ${payment.label} (including ${payment.taxLabel} tax). Scope is locked; new scope is a new request.`
+                    : "No payment settled yet. Don't start filming until it is — that's the scope-lock rule."}
+                </p>
+              )}
+
+              {payment?.status === "paid" && (
+                <dl className="mt-3 grid gap-2 border-t border-line/70 pt-3 text-[12px] sm:grid-cols-2">
+                  <div>
+                    <dt className="text-ink-3">Reference</dt>
+                    <dd className="font-mono text-[11.5px]">{payment.reference}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-ink-3">Amount</dt>
+                    <dd className="font-medium">
+                      {payment.label} <span className="text-ink-3">incl. {payment.taxLabel} VAT</span>
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </section>
+          )}
+
           {lessonReplies.length > 0 && (
             <section className="space-y-4" aria-labelledby="lesson-heading">
               <div className="flex items-center justify-between gap-2">
@@ -255,6 +355,30 @@ export default async function RequestPage({
                   </article>
                 );
               })}
+
+              {request.visibility === "private" && lessonReplies.length > 0 && (isOwner || isCreator) && privateLink && (
+                <div className="rounded-xl border border-info/25 bg-info-soft/40 p-4">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-info">
+                    <Lock size={13} /> Private delivery
+                  </p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
+                    Playback goes through a signed link that expires in 15 minutes and only works for your account.
+                  </p>
+                  <ButtonLink href={privateLink.url} size="sm" className="mt-2">
+                    Open the private player <ArrowRight size={13} />
+                  </ButtonLink>
+                </div>
+              )}
+
+              {isOwner && paidTier && (
+                <DeliveryActions
+                  requestId={request.id}
+                  revisionState={request.revisionState}
+                  deliveryConfirmedAt={request.deliveryConfirmedAt}
+                  windowDays={revisionWindow}
+                  fulfilledAt={request.fulfilledAt}
+                />
+              )}
 
               {isOwner && <FeedbackPrompt requestId={request.id} signedIn={Boolean(user)} existing={viewerFeedback} />}
 
@@ -398,7 +522,7 @@ export default async function RequestPage({
               </p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
                 Only the person who asked and the creator can open this page. It never appears on the public board, in
-                search or in the library.
+                search or in the library.{entitled ? " Your access is active." : ""}
               </p>
             </div>
           )}
@@ -409,6 +533,10 @@ export default async function RequestPage({
             <ButtonLink href="/dashboard" variant="ghost" size="sm" className="w-full justify-center border border-line">
               <Calendar size={15} /> Back to my learning
             </ButtonLink>
+          )}
+
+          {isOwner && !["fulfilled", "declined"].includes(request.status) && (
+            <CancelRequest requestId={request.id} />
           )}
 
           {isCreator && (

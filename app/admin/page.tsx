@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { ArrowRight, Bell, Check, Clock, Inbox, Lock, Plus, Sparkle, Video } from "@/components/icons";
 import { plural } from "@/lib/status";
+import { formatNaira } from "@/lib/pricing";
 
 export const metadata: Metadata = { title: "Creator studio" };
 
@@ -53,32 +54,18 @@ export default async function AdminPage() {
   const outbox = listOutbox(3);
 
   return (
-    <div className="wrap py-8 md:py-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-brand">Creator studio</p>
-          <h1 className="mt-2 text-[clamp(1.8rem,3.4vw,2.4rem)] font-semibold leading-tight">Today&apos;s queue</h1>
-          <p className="mt-2 max-w-xl text-[14.5px] leading-relaxed text-ink-2">
-            One screen for the whole loop: decide, film, publish. Publishing notifies everyone who asked or voted —
-            no manual email.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ButtonLink href="/admin/outbox" variant="secondary" size="sm">
-            <Inbox size={15} /> Outbox
-          </ButtonLink>
-          <ButtonLink href="/explore" variant="ghost" size="sm" className="border border-line">
-            View public site <ArrowRight size={14} />
-          </ButtonLink>
-        </div>
-      </header>
+    <div>
+      <p className="max-w-xl text-[13.5px] leading-relaxed text-ink-2">
+        One screen for the whole loop: decide, film, publish. Publishing notifies everyone who asked or voted — no
+        manual email.
+      </p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Waiting on you", value: stats.inQueue, hint: "open requests", icon: <Bell size={15} />, tone: "bg-accent-soft text-[#8a5209]" },
           { label: "On the waitlist", value: stats.waiting, hint: "over capacity", icon: <Clock size={15} />, tone: "bg-warn-soft text-warn" },
           { label: "Delivered this week", value: stats.deliveredThisWeek, hint: `${stats.delivered} all time`, icon: <Check size={15} />, tone: "bg-brand-soft text-brand" },
-          { label: "Private open", value: stats.privateOpen, hint: "bespoke work", icon: <Lock size={15} />, tone: "bg-info-soft text-info" },
+          { label: "Private open", value: stats.privateOpen, hint: `${formatNaira(stats.revenueKobo)} collected`, icon: <Lock size={15} />, tone: "bg-info-soft text-info" },
         ].map((stat) => (
           <div key={stat.label} className="surface p-4">
             <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.tone}`}>{stat.icon}</span>
@@ -91,7 +78,7 @@ export default async function AdminPage() {
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_20rem]">
         <div className="rounded-2xl border border-line bg-card p-4">
-          <CapacityForm capacity={stats.capacity} queueSize={stats.inQueue} />
+          <CapacityForm capacity={String(stats.capacity)} queueSize={stats.inQueue} />
         </div>
         <div className="rounded-2xl border border-line bg-card p-4">
           <p className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">Learner feedback</p>
@@ -159,7 +146,7 @@ export default async function AdminPage() {
               <Video size={11} /> YouTube for public
             </Badge>
             <Badge tone="neutral">
-              <Lock size={11} /> Signed URLs for private (Phase 7)
+              <Lock size={11} /> Signed URLs for private
             </Badge>
             <Badge tone="neutral">
               <Sparkle size={11} /> {plural(stats.newThisWeek, "new request")} this week
@@ -170,10 +157,18 @@ export default async function AdminPage() {
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-paper-2/50 px-5 py-4">
         <p className="text-[13px] text-ink-2">
-          Two hard gates before paid requests go live: signed-URL hosting and published commercial terms.
+          Payments, entitlements and the notification log are wired. Switch modes, refund, inspect every email —{" "}
+          <Link href="/admin/payments" className="font-medium text-brand hover:underline">
+            payments
+          </Link>{" "}
+          ·{" "}
+          <Link href="/admin/analytics" className="font-medium text-brand hover:underline">
+            analytics
+          </Link>
+          .
         </p>
-        <Link href="/how-it-works#private" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand hover:underline">
-          Read the plan <ArrowRight size={14} />
+        <Link href="/admin/outbox" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand hover:underline">
+          Inspect the outbox <ArrowRight size={14} />
         </Link>
       </div>
     </div>

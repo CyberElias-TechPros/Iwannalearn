@@ -20,6 +20,16 @@ export default async function DashboardPage() {
   const mine = listMyRequests(user.id);
   const backed = listUpvotedRequests(user.id);
   const ready = mine.filter((request) => request.status === "fulfilled");
+  const needsPayment = mine.filter(
+    (request) => request.paymentStatus === "pending" && (request.tier === "private" || request.tier === "priority"),
+  );
+  const needsConfirmation = mine.filter(
+    (request) =>
+      request.status === "fulfilled" &&
+      (request.tier === "private" || request.tier === "priority") &&
+      !request.deliveryConfirmedAt &&
+      request.revisionState !== "closed",
+  );
   const inProgress = mine.filter((request) => OPEN_STATUSES.includes(request.status as never));
   const closed = mine.filter((request) => request.status === "declined");
 
@@ -72,29 +82,32 @@ export default async function DashboardPage() {
             </Badge>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {ready.map((request) => (
+            {ready.map((request) => {
+              const isPrivate = request.visibility === "private";
+              const href = isPrivate ? `/requests/${request.slug}` : `/tutorials/${request.slug}`;
+              return (
               <article key={request.id} className="surface flex flex-col overflow-hidden sm:flex-row">
-                <Link href={`/tutorials/${request.slug}`} className="sm:w-40 sm:shrink-0" aria-label={request.lessonTitle ?? request.title}>
+                <Link href={href} className="sm:w-40 sm:shrink-0" aria-label={request.lessonTitle ?? request.title}>
                   <LessonPoster category={request.category} length={request.videoLength} size="sm" className="h-full rounded-none sm:rounded-l-[1.25rem]" />
                 </Link>
                 <div className="flex flex-1 flex-col gap-1.5 p-4">
-                  <div className="flex items-center gap-2">
-                    <Badge tone="success" dot>
-                      Lesson ready
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={isPrivate ? "info" : "success"} dot>
+                      {isPrivate ? "Private lesson" : "Lesson ready"}
                     </Badge>
                     {request.fulfilledAt && (
                       <span className="text-[11.5px] text-ink-3">{relativeTime(request.fulfilledAt)}</span>
                     )}
                   </div>
                   <h3 className="text-[16.5px] font-semibold leading-snug">
-                    <Link href={`/tutorials/${request.slug}`} className="hover:text-brand">
+                    <Link href={href} className="hover:text-brand">
                       {request.lessonTitle ?? request.title}
                     </Link>
                   </h3>
                   <p className="line-clamp-1 text-[12.5px] text-ink-3">From: “{request.title}”</p>
                   <div className="mt-auto flex items-center gap-2 pt-1.5">
-                    <ButtonLink href={`/tutorials/${request.slug}`} size="sm">
-                      Watch <ArrowRight size={14} />
+                    <ButtonLink href={href} size="sm">
+                      {isPrivate ? "Open privately" : "Watch"} <ArrowRight size={14} />
                     </ButtonLink>
                     <Link href={`/requests/${request.slug}`} className="text-[12.5px] font-medium text-ink-2 hover:text-brand">
                       See the request
@@ -102,8 +115,49 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
+        </section>
+      )}
+
+      {/* Needs you */}
+      {(needsPayment.length > 0 || needsConfirmation.length > 0) && (
+        <section className="mt-8" aria-labelledby="needs-you-heading">
+          <h2 id="needs-you-heading" className="flex items-center gap-2 text-[19px] font-semibold">
+            <Bell size={17} className="text-accent" /> Waiting on you
+          </h2>
+          <p className="mt-1 text-[13.5px] text-ink-3">
+            Two small things you can only do yourself — pay, or confirm the work landed.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {needsPayment.map((request) => (
+              <li key={`pay-${request.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent-soft/40 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13.5px] font-medium">{request.title}</p>
+                  <p className="text-[12px] text-ink-3">
+                    {request.tier === "private" ? "Private commission" : "Priority slot"} · payment pending
+                  </p>
+                </div>
+                <ButtonLink href={`/requests/${request.slug}`} size="sm">
+                  Complete payment <ArrowRight size={13} />
+                </ButtonLink>
+              </li>
+            ))}
+            {needsConfirmation.map((request) => (
+              <li key={`confirm-${request.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-info/25 bg-info-soft/40 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13.5px] font-medium">{request.lessonTitle ?? request.title}</p>
+                  <p className="text-[12px] text-ink-3">
+                    Delivered {request.fulfilledAt ? relativeTime(request.fulfilledAt) : ""} · confirm or ask for one revision
+                  </p>
+                </div>
+                <ButtonLink href={`/requests/${request.slug}`} size="sm" variant="secondary">
+                  Review delivery <ArrowRight size={13} />
+                </ButtonLink>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

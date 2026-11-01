@@ -198,8 +198,17 @@ export default function HowItWorksPage() {
           <p className="mt-1 text-[14px] leading-relaxed text-ink-2">
             A bespoke video of <em>your</em> project or files — not coaching, not a generic video behind a link. We
             deliver it through access-controlled hosting, not an unlisted YouTube URL, because an unlisted URL is not
-            private. Payments are not live in this build; when they are, scope is agreed before any charge.
+            private. The scope is shown to you in writing before you pay, one revision is included, and money is only
+            ever confirmed server-side after the provider says so.
           </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <ButtonLink href="/pricing" size="sm" variant="secondary">
+              See the pricing <ArrowRight size={14} />
+            </ButtonLink>
+            <ButtonLink href="/requests/new?tier=private" size="sm">
+              Start a private request <ArrowRight size={14} />
+            </ButtonLink>
+          </div>
         </div>
       </section>
 

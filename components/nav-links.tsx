@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 const links = [
   { href: "/explore", label: "Explore", match: ["/explore", "/tutorials", "/requests"] },
   { href: "/how-it-works", label: "How it works", match: ["/how-it-works"] },
+  { href: "/pricing", label: "Pricing", match: ["/pricing"] },
 ];
 
 export function NavLinks({ signedIn }: { signedIn: boolean }) {

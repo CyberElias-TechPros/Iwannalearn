@@ -2,15 +2,16 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { SCHEMA, COLUMN_MIGRATIONS, DEFAULT_SETTINGS } from "./schema";
 
 /**
  * Storage layer.
  *
  * The blueprint targets PostgreSQL (Neon/Supabase) with Prisma. To keep this
  * build runnable anywhere with zero external services, the same relational
- * model is implemented on SQLite via Node's built-in driver. Every query lives
- * in lib/queries.ts and every write in lib/actions.ts, so swapping the driver
- * for Prisma/Postgres is a contained change (see IMPLEMENTATION_PLAN.md §5).
+ * model is implemented on SQLite via Node's built-in driver (`prisma/schema.prisma`
+ * mirrors it for the Postgres port). Reads live in lib/queries.ts, writes in
+ * lib/service.ts — so the driver swap is contained.
  */
 
 const DB_DIR = path.join(process.cwd(), "data");
@@ -28,135 +29,36 @@ function nowIso(offsetDays = 0, offsetHours = 0) {
 }
 
 function connect(): DatabaseSync {
-  if (!existsSync(DB_DIR)) mkdirSync(DB_DIR, { recursive: true });
+  const dir = path.dirname(DB_PATH);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   return db;
 }
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  email         TEXT NOT NULL UNIQUE,
-  name          TEXT,
-  role          TEXT NOT NULL DEFAULT 'learner',
-  notify_email  INTEGER NOT NULL DEFAULT 1,
-  created_at    TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-  token       TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at  TEXT NOT NULL,
-  expires_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-
-CREATE TABLE IF NOT EXISTS requests (
-  id             TEXT PRIMARY KEY,
-  ref            TEXT NOT NULL UNIQUE,
-  slug           TEXT NOT NULL UNIQUE,
-  title          TEXT NOT NULL,
-  goal           TEXT NOT NULL,
-  tried          TEXT,
-  context_link   TEXT,
-  category       TEXT NOT NULL,
-  level          TEXT NOT NULL,
-  visibility     TEXT NOT NULL DEFAULT 'public',
-  tier           TEXT NOT NULL DEFAULT 'community',
-  status         TEXT NOT NULL DEFAULT 'submitted',
-  decline_reason TEXT,
-  deadline       TEXT,
-  upvote_count   INTEGER NOT NULL DEFAULT 0,
-  priority_flag  INTEGER NOT NULL DEFAULT 0,
-  created_by     TEXT NOT NULL REFERENCES users(id),
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL,
-  fulfilled_at   TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
-CREATE INDEX IF NOT EXISTS idx_requests_owner ON requests(created_by);
-
-CREATE TABLE IF NOT EXISTS request_upvotes (
-  request_id  TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at  TEXT NOT NULL,
-  PRIMARY KEY (request_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS request_events (
-  id          TEXT PRIMARY KEY,
-  request_id  TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
-  kind        TEXT NOT NULL,
-  from_status TEXT,
-  to_status   TEXT,
-  message     TEXT,
-  actor       TEXT,
-  created_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_events_request ON request_events(request_id);
-
-CREATE TABLE IF NOT EXISTS replies (
-  id             TEXT PRIMARY KEY,
-  request_id     TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
-  kind           TEXT NOT NULL DEFAULT 'external',
-  message        TEXT NOT NULL,
-  video_url      TEXT,
-  video_id       TEXT,
-  video_title    TEXT,
-  video_provider TEXT DEFAULT 'youtube',
-  video_length   TEXT,
-  resources      TEXT,
-  created_by     TEXT NOT NULL REFERENCES users(id),
-  created_at     TEXT NOT NULL,
-  seen_at        TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_replies_request ON replies(request_id);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id          TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  request_id  TEXT,
-  kind        TEXT NOT NULL,
-  title       TEXT NOT NULL,
-  body        TEXT NOT NULL,
-  href        TEXT,
-  read_at     TEXT,
-  created_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
-
-CREATE TABLE IF NOT EXISTS feedback (
-  id          TEXT PRIMARY KEY,
-  request_id  TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  helpful     INTEGER NOT NULL,
-  comment     TEXT,
-  created_at  TEXT NOT NULL,
-  UNIQUE(request_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS outbox (
-  id          TEXT PRIMARY KEY,
-  request_id  TEXT,
-  to_email    TEXT NOT NULL,
-  subject     TEXT NOT NULL,
-  body        TEXT NOT NULL,
-  status      TEXT NOT NULL DEFAULT 'queued',
-  provider    TEXT NOT NULL DEFAULT 'stub',
-  created_at  TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS settings (
-  key    TEXT PRIMARY KEY,
-  value  TEXT NOT NULL
-);
-`;
+function applyColumnMigrations(db: DatabaseSync) {
+  for (const migration of COLUMN_MIGRATIONS) {
+    const columns = db.prepare(`PRAGMA table_info(${migration.table})`).all() as { name: string }[];
+    if (!columns.some((column) => column.name === migration.column)) {
+      db.exec(`ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.ddl}`);
+    }
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Seed                                                                */
 /* ------------------------------------------------------------------ */
+
+type SeedReply = {
+  message: string;
+  videoUrl: string;
+  videoId: string;
+  videoTitle: string;
+  videoLength: string;
+  resources?: { label: string; url: string }[];
+  ageDays: number;
+};
 
 type SeedRequest = {
   ref: string;
@@ -174,15 +76,8 @@ type SeedRequest = {
   visibility?: "public" | "private";
   tier?: "community" | "priority" | "private";
   declineReason?: string;
-  reply?: {
-    message: string;
-    videoUrl: string;
-    videoId: string;
-    videoTitle: string;
-    videoLength: string;
-    resources?: { label: string; url: string }[];
-    ageDays: number;
-  };
+  payment?: { amountKobo: number; taxKobo: number; paidDaysAgo: number };
+  reply?: SeedReply;
 };
 
 const SEED_USERS = [
@@ -190,6 +85,7 @@ const SEED_USERS = [
   { id: "usr_tunde", email: "tunde@example.com", name: "Tunde B.", role: "learner" },
   { id: "usr_zara", email: "zara@example.com", name: "Zara K.", role: "learner" },
   { id: "usr_kola", email: "kola@example.com", name: "Kola A.", role: "learner" },
+  { id: "usr_ife", email: "ifeoma@example.com", name: "Ifeoma N.", role: "learner" },
   { id: "usr_creator", email: "hello@iwannalearn.app", name: "Elias", role: "creator" },
 ];
 
@@ -236,9 +132,7 @@ const SEED_REQUESTS: SeedRequest[] = [
       videoId: "HXV3zeQKqGY",
       videoTitle: "Enough SQL to be dangerous at work",
       videoLength: "4h 20m",
-      resources: [
-        { label: "Practice: 12 sample queries on a fake shop database", url: "https://example.com/sql-practice" },
-      ],
+      resources: [{ label: "Practice: 12 sample queries on a fake shop database", url: "https://example.com/sql-practice" }],
       ageDays: 12,
     },
   },
@@ -401,10 +295,132 @@ const SEED_REQUESTS: SeedRequest[] = [
     level: "confident",
     status: "in_production",
     upvotes: 0,
-    owner: "usr_creator",
+    owner: "usr_ife",
     ageDays: 5,
     visibility: "private",
     tier: "private",
+    deadline: "Needed before the new hires start next month",
+  },
+
+  /* ---- starter library (keeps the product from feeling empty on day one) ---- */
+  {
+    ref: "REQ-1014",
+    slug: "write-my-first-web-page-and-understand-the-tags",
+    title: "Write my first web page and understand what each tag actually does",
+    goal: "Build a one-page site from scratch and be able to explain every tag I used.",
+    tried: "Copied a template, changed the text, broke the layout.",
+    category: "Web development",
+    level: "new",
+    status: "fulfilled",
+    upvotes: 36,
+    owner: "usr_ife",
+    ageDays: 44,
+    reply: {
+      message:
+        "Follow along while typing — don't copy-paste. The part that matters is section 3, where headings, lists and links are explained rather than demonstrated.",
+      videoUrl: "https://www.youtube.com/watch?v=kUMe1FH4CHE",
+      videoId: "kUMe1FH4CHE",
+      videoTitle: "HTML from zero: every tag you'll actually use",
+      videoLength: "4h 07m",
+      resources: [{ label: "The one-page reference used in the video", url: "https://example.com/html-reference" }],
+      ageDays: 38,
+    },
+  },
+  {
+    ref: "REQ-1015",
+    slug: "make-my-page-look-decent-without-a-framework",
+    title: "Make my page look decent without pulling in a whole framework",
+    goal: "Understand spacing, type and layout well enough to style a page by hand.",
+    category: "Web development",
+    level: "some",
+    status: "fulfilled",
+    upvotes: 23,
+    owner: "usr_kola",
+    ageDays: 52,
+    reply: {
+      message:
+        "Twenty minutes, no framework. Pay attention to the flexbox section around 8:00 — that's the bit that stops everything looking cramped.",
+      videoUrl: "https://www.youtube.com/watch?v=1PnVor36_40",
+      videoId: "1PnVor36_40",
+      videoTitle: "CSS that makes a page look intentional",
+      videoLength: "20 min",
+      resources: [],
+      ageDays: 46,
+    },
+  },
+  {
+    ref: "REQ-1016",
+    slug: "stop-being-scared-of-git-branches-and-merges",
+    title: "Stop being scared of git branches and merges",
+    goal: "Create a branch, make a change, open a pull request and resolve one conflict without panicking.",
+    tried: "Only ever committing to main and hoping.",
+    category: "Career & productivity",
+    level: "new",
+    status: "fulfilled",
+    upvotes: 29,
+    owner: "usr_tunde",
+    ageDays: 60,
+    reply: {
+      message:
+        "Watch the first hour, then break a branch on purpose in a throwaway repo. The conflict section starts at 41:00 — replay it until it's boring.",
+      videoUrl: "https://www.youtube.com/watch?v=RGOj5yH7evk",
+      videoId: "RGOj5yH7evk",
+      videoTitle: "Git and GitHub without the fear",
+      videoLength: "1h 08m",
+      resources: [{ label: "Practice repo you can safely break", url: "https://example.com/git-playground" }],
+      ageDays: 54,
+    },
+  },
+  {
+    ref: "REQ-1017",
+    slug: "learn-javascript-properly-instead-of-gluing-snippets",
+    title: "Learn JavaScript properly instead of gluing snippets together",
+    goal: "Understand functions, arrays and events well enough to build a small feature without a tutorial open.",
+    tried: "Six half-finished courses.",
+    category: "Web development",
+    level: "some",
+    status: "fulfilled",
+    upvotes: 17,
+    owner: "usr_ife",
+    ageDays: 68,
+    reply: {
+      message:
+        "This is the one that finally made events click for me. Build the small to-do app he sketches in the last chapter — that's where it sticks.",
+      videoUrl: "https://www.youtube.com/watch?v=W6NZfCO5SIk",
+      videoId: "W6NZfCO5SIk",
+      videoTitle: "JavaScript that finally sticks",
+      videoLength: "48 min",
+      resources: [],
+      ageDays: 61,
+    },
+  },
+
+  /* ---- a completed private commission, to show the paid delivery path ---- */
+  {
+    ref: "REQ-1018",
+    slug: "team-branch-and-review-workflow-for-our-repo",
+    title: "Set up a branch and review workflow that fits our four-person team",
+    goal: "A repo setup with branch protection, a pull-request template and a short walkthrough of the daily loop.",
+    tried: "Everyone commits to main; we've already lost work once.",
+    category: "Career & productivity",
+    level: "some",
+    status: "fulfilled",
+    upvotes: 0,
+    owner: "usr_amara",
+    ageDays: 20,
+    visibility: "private",
+    tier: "private",
+    payment: { amountKobo: 2_500_000, taxKobo: 0, paidDaysAgo: 24 },
+    reply: {
+      message:
+        "Recorded against your actual repo. Start at 2:10 where the branch protection rules go in; the daily loop is the last four minutes. The pull-request template is in your repo under .github/.",
+      videoUrl: "https://www.youtube.com/watch?v=RGOj5yH7evk",
+      videoId: "RGOj5yH7evk",
+      videoTitle: "Your team's branch and review workflow",
+      videoLength: "14 min",
+      resources: [{ label: "Pull-request template we set up together", url: "https://example.com/pr-template" }],
+      ageDays: 18,
+    },
   },
 ];
 
@@ -416,19 +432,21 @@ const SEED_UPVOTERS = [
   ["REQ-1007", ["usr_tunde", "usr_zara", "usr_kola"]],
   ["REQ-1008", ["usr_amara", "usr_zara"]],
   ["REQ-1010", ["usr_amara", "usr_tunde", "usr_zara"]],
+  ["REQ-1014", ["usr_amara", "usr_tunde", "usr_zara"]],
+  ["REQ-1016", ["usr_amara", "usr_zara"]],
 ] as const;
 
 function seed(db: DatabaseSync) {
   const insertUser = db.prepare(
-    "INSERT INTO users (id, email, name, role, notify_email, created_at) VALUES (?, ?, ?, ?, 1, ?)",
+    "INSERT INTO users (id, email, name, role, notify_email, created_at, email_verified_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
   );
-  for (const u of SEED_USERS) insertUser.run(u.id, u.email, u.name, u.role, nowIso(40));
+  for (const user of SEED_USERS) insertUser.run(user.id, user.email, user.name, user.role, nowIso(40), nowIso(40));
 
   const insertRequest = db.prepare(`
     INSERT INTO requests (
-      id, ref, slug, title, goal, tried, category, level, visibility, tier, status,
-      decline_reason, deadline, upvote_count, created_by, created_at, updated_at, fulfilled_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, ref, slug, title, goal, tried, deadline, category, level, visibility, tier, status,
+      decline_reason, payment_status, price_kobo, upvote_count, created_by, created_at, updated_at, fulfilled_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertReply = db.prepare(`
     INSERT INTO replies (
@@ -443,79 +461,83 @@ function seed(db: DatabaseSync) {
   const insertUpvote = db.prepare(
     "INSERT OR IGNORE INTO request_upvotes (request_id, user_id, created_at) VALUES (?, ?, ?)",
   );
+  const insertPayment = db.prepare(`
+    INSERT INTO payments (id, request_id, user_id, provider, reference, kind, amount_kobo, tax_kobo, currency, status, paid_at, created_at, updated_at)
+    VALUES (?, ?, ?, 'mock', ?, 'private', ?, ?, 'NGN', 'paid', ?, ?, ?)
+  `);
+  const insertEntitlement = db.prepare(`
+    INSERT INTO entitlements (id, user_id, request_id, access_type, granted_at) VALUES (?, ?, ?, 'private', ?)
+  `);
+  const insertNotificationLog = db.prepare(`
+    INSERT INTO notification_logs (id, outbox_id, provider, channel, status, attempts, idempotency_key, to_email, subject, created_at, updated_at)
+    VALUES (?, ?, 'stub', 'email', 'delivered', 1, ?, ?, ?, ?, ?)
+  `);
 
-  for (const r of SEED_REQUESTS) {
-    const createdAt = nowIso(r.ageDays);
-    const id = `req_${r.ref.toLowerCase()}`;
+  for (const request of SEED_REQUESTS) {
+    const createdAt = nowIso(request.ageDays);
+    const id = `req_${request.ref.toLowerCase()}`;
     insertRequest.run(
       id,
-      r.ref,
-      r.slug,
-      r.title,
-      r.goal,
-      r.tried ?? null,
-      r.category,
-      r.level,
-      r.visibility ?? "public",
-      r.tier ?? "community",
-      r.status,
-      r.declineReason ?? null,
-      r.deadline ?? null,
-      r.upvotes,
-      r.owner,
+      request.ref,
+      request.slug,
+      request.title,
+      request.goal,
+      request.tried ?? null,
+      request.deadline ?? null,
+      request.category,
+      request.level,
+      request.visibility ?? "public",
+      request.tier ?? "community",
+      request.status,
+      request.declineReason ?? null,
+      request.payment ? "paid" : "none",
+      request.payment?.amountKobo ?? null,
+      request.upvotes,
+      request.owner,
       createdAt,
-      nowIso(Math.max(0, r.ageDays - 2)),
-      r.reply ? nowIso(r.reply.ageDays) : null,
+      nowIso(Math.max(0, request.ageDays - 2)),
+      request.reply ? nowIso(request.reply.ageDays) : null,
     );
 
-    insertEvent.run(
-      randomUUID(),
-      id,
-      "created",
-      null,
-      "submitted",
-      "Request received.",
-      r.owner,
-      createdAt,
-    );
+    insertEvent.run(randomUUID(), id, "created", null, "submitted", "Request received.", request.owner, createdAt);
 
-    if (r.status !== "submitted" && r.status !== "declined") {
+    if (request.status !== "submitted" && request.status !== "declined") {
       insertEvent.run(
         randomUUID(),
         id,
         "status",
         "submitted",
-        r.status,
+        request.status,
         null,
         "usr_creator",
-        nowIso(Math.max(0, r.ageDays - 1)),
+        nowIso(Math.max(0, request.ageDays - 1)),
       );
     }
-    if (r.status === "declined") {
+    if (request.status === "declined") {
       insertEvent.run(
         randomUUID(),
         id,
         "declined",
         "submitted",
         "declined",
-        r.declineReason ?? null,
+        request.declineReason ?? null,
         "usr_creator",
-        nowIso(Math.max(0, r.ageDays - 1)),
+        nowIso(Math.max(0, request.ageDays - 1)),
       );
     }
 
-    if (r.reply) {
+    if (request.reply) {
       insertReply.run(
-        `rep_${r.ref.toLowerCase()}`,
+        `rep_${request.ref.toLowerCase()}`,
         id,
-        r.reply.message,
-        r.reply.videoUrl,
-        r.reply.videoId,
-        r.reply.videoTitle,
-        r.reply.videoLength,
-        JSON.stringify(r.reply.resources ?? []),
+        request.reply.message,
+        request.reply.videoUrl,
+        request.reply.videoId,
+        request.reply.videoTitle,
+        request.reply.videoLength,
+        JSON.stringify(request.reply.resources ?? []),
         "usr_creator",
-        nowIso(r.reply.ageDays),
+        nowIso(request.reply.ageDays),
       );
       insertEvent.run(
         randomUUID(),
@@ -525,15 +547,31 @@ function seed(db: DatabaseSync) {
         "fulfilled",
         "Lesson published.",
         "usr_creator",
-        nowIso(r.reply.ageDays),
+        nowIso(request.reply.ageDays),
       );
+    }
+
+    if (request.payment) {
+      const reference = `MOCK-${request.ref}`;
+      insertPayment.run(
+        randomUUID(),
+        id,
+        request.owner,
+        reference,
+        request.payment.amountKobo,
+        request.payment.taxKobo,
+        nowIso(request.payment.paidDaysAgo),
+        nowIso(request.payment.paidDaysAgo),
+        nowIso(request.payment.paidDaysAgo),
+      );
+      insertEntitlement.run(randomUUID(), request.owner, id, nowIso(request.payment.paidDaysAgo));
     }
   }
 
   for (const [ref, voters] of SEED_UPVOTERS) {
     const id = `req_${ref.toLowerCase()}`;
-    for (const [i, userId] of voters.entries()) {
-      insertUpvote.run(id, userId, nowIso(3 + i));
+    for (const [index, userId] of voters.entries()) {
+      insertUpvote.run(id, userId, nowIso(3 + index));
     }
   }
 
@@ -554,6 +592,17 @@ function seed(db: DatabaseSync) {
   );
   insertNotification.run(
     randomUUID(),
+    "usr_amara",
+    "req_req-1018",
+    "lesson_ready",
+    "Your private lesson is ready 🔒",
+    "Your team's branch and review workflow — only you can open it.",
+    "/requests/team-branch-and-review-workflow-for-our-repo",
+    null,
+    nowIso(18),
+  );
+  insertNotification.run(
+    randomUUID(),
     "usr_tunde",
     "req_req-1001",
     "lesson_ready",
@@ -565,20 +614,34 @@ function seed(db: DatabaseSync) {
   );
 
   const insertOutbox = db.prepare(
-    "INSERT INTO outbox (id, request_id, to_email, subject, body, status, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO outbox (id, request_id, to_email, subject, body, html, status, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
+  const outboxId = randomUUID();
+  const createdAt = nowIso(12);
   insertOutbox.run(
-    randomUUID(),
+    outboxId,
     "req_req-1002",
     "amara@example.com",
     "Your lesson is ready: Enough SQL to be dangerous at work",
     "Hi Amara,\n\nYour requested lesson is live and waiting for you.\n\nWatch it here: /tutorials/learn-enough-sql-to-query-our-company-database\n\nYou asked: “Learn enough SQL to query our company database without asking for a favour.”\n\n— Elias at iwannalearn",
+    '<p>Hi Amara,</p><p>Your requested lesson is live and waiting for you.</p><p><a href="/tutorials/learn-enough-sql-to-query-our-company-database">Watch the lesson</a></p><p>— Elias at iwannalearn</p>',
     "delivered",
     "stub",
-    nowIso(12),
+    createdAt,
+  );
+  insertNotificationLog.run(
+    randomUUID(),
+    outboxId,
+    "rep_req-1002:amara@example.com",
+    "amara@example.com",
+    "Your lesson is ready: Enough SQL to be dangerous at work",
+    createdAt,
+    createdAt,
   );
 
-  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("weekly_capacity", "4");
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+  }
 
   db.prepare(`
     INSERT INTO request_events (id, request_id, kind, from_status, to_status, message, actor, created_at)
@@ -600,9 +663,14 @@ export function getDb(): DatabaseSync {
 
   const db = connect();
   db.exec(SCHEMA);
+  applyColumnMigrations(db);
 
   const row = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
   if (row.n === 0) seed(db);
+
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+  }
 
   globalForDb.__iwlStore = { db };
   return db;
@@ -619,4 +687,4 @@ export function row<T>(stmt: ReturnType<DatabaseSync["prepare"]>, ...params: any
 }
 
 export const iso = nowIso;
-export { randomUUID };
+export { randomUUID, DB_PATH };

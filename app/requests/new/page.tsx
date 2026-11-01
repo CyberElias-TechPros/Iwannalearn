@@ -12,13 +12,14 @@ export const metadata: Metadata = {
 export default async function NewRequestPage({
   searchParams,
 }: {
-  searchParams: Promise<{ title?: string; category?: string }>;
+  searchParams: Promise<{ title?: string; category?: string; tier?: string }>;
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
   const initialCategory = CATEGORIES.includes((params.category ?? "") as (typeof CATEGORIES)[number])
     ? params.category!
     : "";
+  const initialTier = params.tier === "private" || params.tier === "priority" ? params.tier : "community";
 
   return (
     <div className="wrap max-w-5xl py-8 md:py-12">
@@ -37,7 +38,12 @@ export default async function NewRequestPage({
       </header>
 
       <div className="mt-8">
-        <RequestWizard signedIn={Boolean(user)} initialTitle={params.title ?? ""} initialCategory={initialCategory} />
+        <RequestWizard
+          signedIn={Boolean(user)}
+          initialTitle={params.title ?? ""}
+          initialCategory={initialCategory}
+          initialTier={initialTier}
+        />
       </div>
     </div>
   );

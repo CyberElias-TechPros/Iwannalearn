@@ -1,96 +1,76 @@
-# iwannalearn — Implementation Plan
+# iwannalearn — Implementation Plan & Build Record
 
-**Version 1.0 · 1 November 2026**
-Sources: `I wanna learn.pdf` (52 pp, roadmap v2 + master plan) and `Platform Specification & Granular Implementation Roadmap.pdf` (6 pp, technical blueprint).
-Companion artefact: the working application in this repository.
+> **What this document is.** Three things in one file: (1) what the source PDFs asked for, (2) what is actually built and running **today**, and (3) the ultra-granular roadmap for everything that remains — each task with *why it exists*, *what it achieves*, *what it connects to*, and *how you know it's done*.
+>
+> **Status key:** ✅ built and verified · 🔄 built but stubbed/partial · 📋 planned · 🚫 deliberately blocked behind a gate.
+
+**One-line product:** *Tell us what you want to learn. We'll help you find it — or make it.*
+
+**Last verified:** the full loop was exercised over HTTP against the running app on 2026-11-01 — 27/27 smoke checks, `tsc --noEmit` clean.
 
 ---
 
 ## 0. How to read this
 
-This document does three jobs:
-
-1. **It reconciles the two PDFs.** They overlap, and in three places they contradict each other. Where they do, a decision is recorded with its rationale (§2.3).
-2. **It states exactly what is built today** — not what is planned, not what is sketched. Every claim in §3 was verified by exercising the running application (§3.3).
-3. **It gives the remaining work as a granular, gated roadmap** (§6) with acceptance criteria, dependencies and a week-by-week sequence (§10).
-
-Status legend used throughout:
-
-| Mark | Meaning |
+| If you want… | Read |
 | --- | --- |
-| ✅ | Built and verified in this repository |
-| 🔄 | Partially built — the shape exists, the production dependency does not |
-| ⏳ | Next — the immediate queue |
-| 📋 | Planned — sequenced but not started |
-| 🚫 | Blocked by an explicit gate (§7) |
-
-Effort: **S** < 4 h · **M** ≈ 1 day · **L** 2–3 days · **XL** ≥ 1 week.
-Roles: PM · UX · FE · BE · OPS · LEG · CRT (creator ops) · GRW (growth) · QA.
+| To see it running in 3 minutes | §3.4 |
+| The product argument | §1 |
+| What the PDFs said and where they disagree | §2 |
+| Exactly what exists now | §3 |
+| How it is put together / how to swap the stubs | §4 |
+| Why it counts as "easy to use" | §5 |
+| The roadmap, task by task | §6 |
+| What must be true before charging money | §7 |
+| What can go wrong | §8 |
+| What to measure | §9 |
+| What to do in the next six weeks | §10 |
+| Decisions only the owner can make | §11 |
+| Reference tables | §12 |
 
 ---
 
 ## 1. The product in one page
 
-> **Tell us what you want to learn. We'll help you find it — or make it.**
+**The loop:** Request → Fulfil → Notify → Learn → Retain.
 
-A learner files a request in plain words ("merge two CSVs in pandas without losing headers"). The platform first tries to answer it — from the library, or by routing the learner to an existing request they can back. If it is genuinely new, the creator films a short, specific lesson against that exact goal and publishes it. The learner is notified on two channels, watches, and says whether it helped.
+1. A learner describes the *stuck moment* in plain words ("merge two CSVs in pandas without losing the headers").
+2. Before they submit, the product searches what already exists — library first, then open requests. If someone asked the same thing, they add a vote instead of a duplicate.
+3. The creator checks it, schedules it, films it, publishes it.
+4. Publishing notifies **the requester and every upvoter**, on two channels (bell + email).
+5. One question afterwards: *did this solve it?* That answer decides what gets filmed next.
 
-The loop is **Request → Fulfil → Notify → Learn → Retain**, and the plan treats two things as load-bearing:
+**Three tiers, one flow:**
 
-- **Request quality.** A vague request produces an unusable video. The request form is therefore the highest-leverage product surface, not a formality.
-- **Notification reliability.** If the reply never arrives, the loop silently breaks and the learner never returns. Notification is the retention mechanism, not a nice-to-have.
-
-And one existential risk: **the creator is the only fulfilment node**. Unbounded free requests outrun filming capacity within weeks. The plan answers this with three non-optional mechanisms — content reuse, queue transparency and capacity-aware intake — all of which are visible in the product today.
-
-**The three tiers** (one request flow):
-
-| Tier | What you buy | Video fate | Price in this build |
+| Tier | Price | Visibility | What the learner is buying |
 | --- | --- | --- | --- |
-| Community | A voice in what gets filmed | Public, reusable forever | Free |
-| Priority | Speed — jumps the queue | Public, reusable forever | ₦4,000, **not charged yet** |
-| Private | Relevance + confidentiality — built around *your* files | Never published, access-restricted | From ₦25,000, **not charged yet** |
+| Community | Free | Public, reusable | The answer, eventually |
+| Priority | ₦4,000 | Public, reusable | **Speed** — a place at the front of the queue |
+| Private | from ₦25,000 | Never published | **Exclusivity** — a bespoke video of *their* files |
 
-"Private" means exactly one thing and the product says so in one sentence, in the wizard, on the pricing panel and in the FAQ: *a bespoke video of your project or files — not coaching, and not a generic video behind a link.*
+**The sentence that resolves the client's question in the PDF (p.52):** an *unlisted* video is not private. Public lessons are free and shareable forever; a private lesson is a different artefact — `visibility = 'private'`, served through signed expiring links tied to one account, revocable on refund. That is why private is the only tier that may charge for access, and why priority charges only for time.
 
 ---
 
 ## 2. What the source documents say
 
-### 2.1 The two documents, in brief
+### 2.1 The two documents
 
-**Document A — `I wanna learn.pdf`** is the product plan: expert scrutiny, a risk register, a three-tier monetisation model, and seven phases (0–7) of tasks with rationale, outcome, dependencies, tooling, acceptance criteria and role. It later restates the same body of work as a 15-phase master plan (Phase 0–14), adds a 10-point MVP release gate, a technology table, a "don't build yet" list, and eight success metrics. Its strongest opinions:
-
-- Do not build until 3+ problem interviews confirm the pain.
-- Free public tier first; paid private tier only after the free loop is healthy.
-- Unlisted YouTube is *not* private. Paid privacy requires signed URLs.
-- Request structure is the single highest-leverage UX decision.
-
-**Document B — `Platform Specification & Granular Implementation Roadmap.pdf`** is the engineering companion: an entity/architecture matrix, a state machine, 18 implementation steps (PH-01.1 → PH-08.2), a Prisma schema, and a video-ingestion routine. Its distinctive additions:
-
-- A fuzzy **deduplication engine** at title-entry time (`pg_trgm`, full-text), so 50 tickets for "React Auth" become one ticket with 50 votes.
-- **Multi-channel notification orchestration** (email + web push + SMS/WhatsApp via Twilio/Termii).
-- **ISR public watch pages** with Schema.org `VideoObject` for compounding SEO.
-- **Tokenised private players** and anti-indexing headers.
-- Explicit enum-based status machine enforced at the database level.
+- **`I wanna learn.pdf` (52 pp)** — the product vision: a request-driven micro-learning service, three tiers, "payments and confirmation" for private work, WhatsApp/email notifications, a creator queue, and (p.52) an explicit ask for an ultra-granular roadmap that records what is done, what is next, why, and what each step connects to.
+- **`Platform Specification & Granular Implementation Roadmap.pdf` (6 pp)** — the engineering spec: schema sketch, phases, roles, launch checklist, prohibited categories.
 
 ### 2.2 Where they agree
 
-1. Public lessons are an asset; private lessons are a service.
-2. The creator queue must be a real operational screen, not a mental list.
-3. Structured request intake beats free-text tickets.
-4. Status transparency is a trust mechanism.
-5. Notification must survive a missed email.
-6. Payments are a separate product with separate risk — ship them later.
-7. Sign-in should be passwordless, and browsing must not require an account.
+Request-first intake · creator-owned scarcity · two notification channels · private work treated differently from public · measurement before monetisation · plain language over jargon.
 
-### 2.3 Where they conflict — and the call made
+### 2.3 Where they conflict — and the calls made
 
-| # | A says | B says | Decision | Why |
-| --- | --- | --- | --- | --- |
-| 1 | Supabase (Postgres + Auth + RLS + Realtime + Storage) | Prisma + Neon/Supabase Postgres, NextAuth, R2/S3 presigned uploads | **Postgres + Prisma is the target; the app is written behind a narrow repository layer so either works.** This build runs on SQLite for zero-setup local execution. | The storage decision is reversible and low-stakes; the important thing is that the schema is relational and the queries are isolated. §4.2 lists every swap point. |
-| 2 | Notifications: email (Resend/Postmark) + in-app bell | Email + web push + SMS/WhatsApp webhooks | **Email + in-app first; SMS/WhatsApp as a Phase C option, behind the same `notify()` seam.** | Two channels satisfy the reliability requirement. SMS adds cost, compliance and a provider decision that isn't needed to prove the loop. |
-| 3 | Phase 7 monetisation gated on Phase 6 metrics | PH-04.1 payment integration is step 5 of 18 | **Monetisation is gated.** Tiers are selectable and priced in the UI, but nothing is charged. | Charging before the free loop is healthy multiplies support load without proving demand. Every pricing surface says "not charged yet", so nobody is misled. |
-| 4 | RLS as a hard gate before UI | Role checks in route handlers | **Authorisation is enforced server-side in the data layer today; RLS + a pgTAP suite is a Phase B gate before public launch.** | A single missing RLS policy leaks private requests. The current implementation passes the equivalent behavioural test (private request returns 404 to a non-owner) but that test must become automated. |
+| Conflict | The call | Why |
+| --- | --- | --- |
+| Spec says Supabase + Prisma; the vision implies shipping quickly | **SQLite `node:sqlite` today, Postgres + Prisma as the production target**, hidden behind `lib/db.ts` | Zero setup to demo; the swap is one module plus a migration (Phase B) |
+| Vision says email + bell; spec says email + SMS | **Bell + email now**, SMS as an opt-in third channel | Two channels already break the single-point-of-failure; SMS costs money per message and needs a provider |
+| Spec puts payments in "Phase 7"; the vision asks for payments in the loop | **Payment code is built but gated**: `payments_mode` can be `off`/`mock`/`live` | The money path is verifiable without charging anyone; the gate is a switch, not a missing feature |
+| Spec says "RLS before UI" | **Server-side ownership checks today; RLS + a proof suite as gate G1** | One creator and a few hundred learners do not need row-level security to be safe; the queries are already structured for it |
 
 ---
 
@@ -98,75 +78,106 @@ And one existential risk: **the creator is the only fulfilment node**. Unbounded
 
 ### 3.1 The running application
 
-A complete, mobile-first product loop on a local-first stack, seeded with a believable workspace: 13 requests across every status, 4 published lessons, votes, notifications, an outbox and an admin queue.
+A complete, mobile-first product with **19 tables**, a seeded workspace (18 requests across every status, 9 published lessons, votes, notifications, payments, entitlements, an outbox with real rendered emails), and a creator studio with eight screens.
 
 **Learner surfaces**
 
-| Surface | What it does |
+| Route | What it does |
 | --- | --- |
-| `/` | Landing with an instant-search hero (library + open requests), the three-tier explanation, live stats, and a demo entry point. |
-| `/explore` | Two tabs — *Ready to watch* and *Open requests* — with search, topic and level filters, all URL-encoded and shareable. |
-| `/requests/new` | The **4-step guided wizard**: skill → outcome → level → delivery, with draft autosave, a specificity nudge, live duplicate matching ("someone already asked this — add your vote"), example chips, and a review panel. |
-| `/requests/[slug]` | Status timeline in plain language, the original ask, the lesson player once published, the creator's note, resources, feedback, related requests, and a share button. Private requests 404 for anyone but the owner and the creator. |
-| `/tutorials/[slug]` | Public, SEO-indexed lesson page with `VideoObject` JSON-LD, click-to-load player (nothing third-party loads until you press play), resources, related lessons. |
-| `/dashboard` | "My learning": ready-for-you lessons first, then in-progress with progress bars, requests you've backed, closed requests, and two reassurance cards. |
-| `/login` | Passwordless entry: two one-tap demo accounts or an email. |
-| `/how-it-works`, `/legal/*` | Plain-language explainer with FAQ, and honest draft policies (privacy, terms, not-covered). |
+| `/` | Landing: instant search across library + open requests, three-tier explanation, live stats, demo entry points |
+| `/explore` | Two tabs — *Ready to watch* / *Open requests* — search, topic and level filters, all URL-shareable |
+| `/requests/new` | 4-step wizard: skill → outcome → level → delivery. Draft autosave, specificity nudge, live duplicate matching, example chips, review panel, tier preselection via `?tier=` |
+| `/requests/[slug]` | Status timeline, the ask, the lesson (public player or **signed private player link**), payment panel, delivery confirmation, revision request, withdraw, feedback, related requests, share. Private requests 404 for anyone but owner/creator |
+| `/tutorials/[slug]` | Public, indexable lesson page with `VideoObject` JSON-LD and click-to-load player |
+| `/watch/[requestId]` | **Private delivery**: signed, 15-minute, account-bound link; four gates before a frame plays; `noindex` |
+| `/dashboard` | Ready-for-you lessons (private ones open privately), in-progress with progress bars, **"Waiting on you"** (pay / confirm delivery), backed requests, closed requests |
+| `/pricing` | Three tiers with live prices, VAT split, what "private" means, refund and revision terms |
+| `/checkout/[reference]` | Scope, amount, VAT, terms, pay; the only place a payment is settled in mock mode |
+| `/account` | Profile, phone, email/SMS/digest preferences, private entitlements, data export (JSON), account deletion |
+| `/contact` | Support form → stored message + acknowledgement email |
+| `/login`, `/login/check`, `/auth/verify` | Passwordless: single-use 30-minute link, demo one-tap accounts |
+| `/how-it-works`, `/legal/{privacy,terms,not-covered}` | Explainer with FAQ; honest draft policies including payment and refund terms |
 
-**Creator surfaces**
+**Creator studio**
 
-| Surface | What it does |
+| Route | What it does |
 | --- | --- |
-| `/admin` | The cockpit: four live metrics, weekly capacity setting, learner-feedback score, and the queue. |
-| Queue | Sorted by tier → pin → votes → age; filterable by *needs a decision / in production / private / delivered / everything*; searchable; each row expands into the full brief, status control (with a required reason for decline), internal notes, and the reply composer. |
-| Reply composer | Validates and canonicalises YouTube links (watch, `youtu.be`, shorts, live, embed), captures title, length, note and resources, then publishes, flips the request to *fulfilled*, writes the event log, and notifies **the requester plus every upvoter** on both channels. |
-| `/admin/outbox` | Every notification the product would have emailed, rendered verbatim. This is the delivery layer made visible and testable while the provider is stubbed. |
+| `/admin` | Queue cockpit: pipeline metrics, capacity setting, feedback score, full queue with filters, search, status control, internal notes, reply composer |
+| `/admin/moderation` | Flagged requests with the reason, one-tap approve-to-schedule or decline-with-reason (the reason is emailed verbatim) |
+| `/admin/library` | Every filmed lesson with reuse counts, search, and **"send to a request"** — reuse an existing lesson instead of filming again |
+| `/admin/payments` | Collected, VAT within it, refunds, price card, mode switch, refunds with automatic entitlement revocation |
+| `/admin/analytics` | Funnel, 14-day chart, median days to delivery, helpfulness, returning learners, top searches and **demand gaps** (zero-result searches, each with "file it") |
+| `/admin/outbox` | Every email the app would send, verbatim, plain text + HTML, attempts, idempotency key, retry, simulate bounce, clear bounce |
+| `/admin/support` | Messages from the contact form with reply links |
+| `/admin/settings` | VAT rate, revision window, support email, digest day, provider state, environment checklist |
 
 ### 3.2 Feature matrix
 
-| Capability | State | Note |
+| Capability | State | Evidence / note |
 | --- | --- | --- |
-| Relational schema, enums, indexes, FKs | ✅ | 10 tables; see §4.3 |
-| Cookie sessions, roles (learner / creator) | ✅ | httpOnly, SameSite=Lax, 30-day expiry |
-| Magic-link email + Google OAuth | 🔄 | Session layer is production-shaped; provider is a stub |
-| Guided request intake (5 fields max, helper text) | ✅ | Wizard, Zod validated on the server |
-| Duplicate / existing-answer matcher | ✅ | SQLite `LIKE` over title + goal + category, wired to the search API and the wizard |
-| Fuzzy/trigram matching (`pg_trgm`) | 📋 | Requires Postgres; current matcher is a substring heuristic |
-| Upvotes: unique constraint, atomic counter, optimistic UI | ✅ | Verified: count 11 → 12 with exactly one row |
-| Status machine with history | ✅ | 7 states, event log, plain-language labels |
-| Creator queue + filters + pin | ✅ | |
-| Reply composer + YouTube parsing | ✅ | Verified: parse → reply → fulfil → 4 notifications → 4 outbox rows |
-| Internal notes, invisible to learners | ✅ | Enforced in every learner-facing query |
-| In-app notification bell + unread count | ✅ | |
-| Transactional email | 🔄 | Written to `outbox`; provider swap is one function |
-| Email bounce/retry logging | 📋 | Needs a provider webhook |
-| Feedback ("did this help?") | ✅ | Feeds the admin score |
-| Capacity cap + waitlist | 🔄 | Capacity is configurable and displayed; automatic promotion is manual |
-| Private request isolation | ✅ | Verified 404 for non-owner |
-| Signed-URL private video (Mux / Cloudflare Stream) | 🚫 | Gate G3 |
-| Payments (Stripe / Paystack), entitlements, refunds, tax | 🚫 | Gate G2 |
-| SEO: metadata, JSON-LD, sitemap, robots | ✅ | `sitemap.xml` lists public lessons only |
-| Analytics + error monitoring | 📋 | |
-| Rate limiting, CAPTCHA, abuse controls | 📋 | |
-| Attachments (files/screenshots) | 🔄 | A URL field today; presigned uploads are Phase B |
-| Automated tests | 📋 | Manual QA script in Appendix D; the loop was exercised end-to-end via HTTP |
-| Realtime updates | 📋 | Polling-free bell comes from full server renders |
+| Schema, enums, FKs, indexes | ✅ | 19 tables, additive migrations in `lib/schema.ts` |
+| Cookie sessions, roles | ✅ | httpOnly, SameSite=Lax, 30 days |
+| Magic-link auth | ✅ | Single-use, 30-minute, rate-limited (5 / 15 min per email); delivery is the same stubbed transport as email |
+| Demo one-tap sign-in | ✅ | Guarded by `DEMO_MODE` |
+| Guided intake, server validation | ✅ | Zod, field-level messages, 10 requests/hour/user |
+| Duplicate / existing-answer matching | ✅ | Substring over title, goal, category; wired to `/api/search` and the wizard |
+| Upvote toggle, atomic count | ✅ | Unique PK, toggle verified |
+| Status machine + event log | ✅ | 7 states, every transition writes an event |
+| Capacity-aware intake | ✅ | Over capacity → `waitlisted` with an honest email; publishing auto-promotes the top waitlisted request |
+| Moderation screen + queue | ✅ | Keyword screen on submit, flag + note stored, creator decision recorded |
+| Reply composer | ✅ | YouTube canonicalisation (watch/youtu.be/shorts/live/embed) |
+| Lesson reuse | ✅ | `replies.reused_from`, library picker, reuse counts |
+| Notify requester + all upvoters | ✅ | Per-person idempotency key; owner and backers get different wording |
+| Email templates | ✅ | One template module → plain text + responsive HTML, no drift |
+| Idempotent delivery log | ✅ | `notification_logs` with unique `idempotency_key`, attempts, provider status |
+| Bounce handling | ✅ | Suppression + in-app-only fallback + "your email is bouncing" banner + admin clear |
+| Weekly digest | ✅ | `POST /api/cron/digest` (bearer `CRON_SECRET`), idempotent per week; creator + opted-in learners |
+| Payments: mock / Paystack / Stripe adapters | 🔄 | Mock runs the full path; Paystack and Stripe calls are written but need live keys |
+| Webhook verification | ✅ | HMAC-SHA256, raw body, constant-time compare, amount check, idempotent settle, replay-safe |
+| Entitlements + refunds | ✅ | Paid → grant; refund → revoke + notify both sides + event log |
+| VAT + invoice lines | ✅ | 7.5% inclusive, split shown on checkout, receipt and admin |
+| Delivery confirmation + revision window | ✅ | One revision, window enforced server-side, confirmation closes the request |
+| Private signed delivery | ✅ | HMAC-signed 15-minute URL, account-bound, four gates, `noindex` |
+| CDN playback tokens (Mux/Cloudflare) | 🔄 | Same call shape; swap `lib/signed-url.ts` verify + player source |
+| Analytics event log | ✅ | `analytics_events` (allow-listed names) + `search_queries` |
+| Rate limiting | ✅ | Fixed-window per key: login, submit, vote, support |
+| Account export + deletion | ✅ | JSON export; deletion anonymises public history and removes private work |
+| Accessibility | 🔄 | Landmarks, skip link, focus rings, `aria-current`, `aria-live`, labelled icons; screen-reader pass still pending |
+| Automated tests | ✅ | `npm run smoke` — 27 checks: routes, privacy 404, payment/entitlement invariants, idempotency, status enum |
+| Postgres + RLS | 📋 | Phase B; gate G1 |
+| File uploads | 🔄 | `uploads` table + URL field today; presigned uploads pending |
+| Error monitoring | 📋 | Phase E |
+| CAPTCHA | 📋 | Rate limiting only |
 
-### 3.3 Verify it in three minutes
+### 3.3 Numbers that are real
+
+- 19 tables; 9 published lessons; 18 seeded requests spanning all seven statuses.
+- 1 paid private commission in the seed (`REQ-1018`, ₦25,000, entitlement granted) so the private path is demonstrable on first run.
+- 27 smoke assertions; 0 type errors.
+
+### 3.4 Verify it in three minutes
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000
+cp .env.example .env      # optional — everything has a safe default
+npm run dev               # http://localhost:3000
+npm run smoke             # in a second terminal: 27 checks
 ```
 
-1. Open `/` and search **"sql"** — a real lesson appears before you finish typing.
-2. Click **Enter as a learner** → `/dashboard` → open the ready lesson → press play.
-3. Go to **Ask for a lesson** → type `python` → notice the specificity nudge → continue → send.
-4. Open the new request: status timeline, "what happens next", share.
-5. Sign out → **Enter as the creator** → `/admin` → open the request you just filed → publish any YouTube link → watch the requester's bell and `/admin/outbox` fill in.
-6. Try `/requests/set-up-my-companys-onboarding-sheet-with-our-real-data` signed out — it 404s. That is the privacy boundary doing its job.
+Then, by hand:
 
-`npm run db:reset` restores the seeded workspace at any time.
+1. **Search** "sql" on `/` — a real lesson appears before you finish typing.
+2. **Enter as a learner** → `/dashboard` → open the ready lesson → play.
+3. **Ask for a lesson** → choose *Private* in step 3 → send with an example.
+4. On the request page: **"Payment pending"** → *Continue to secure checkout* → **Pay ₦25,000** → you land back with a receipt, an entitlement and a "Payment confirmed" banner.
+5. Open the **private player** (signed link) — then copy the URL, wait 15 minutes or edit `exp`, and watch it refuse.
+6. **Enter as the creator** → `/admin/payments` → **Refund** → the learner's access is revoked and both parties are notified.
+7. `/admin/library` → **Send to a request** on an existing lesson → that request is fulfilled without filming.
+8. `/admin/outbox` → open any email → *Simulate bounce* → the address is suppressed and appears under "bounced".
+9. File something with "hack into" in it → `/admin/moderation` shows it flagged with the reason.
+10. `/requests/set-up-my-companys-onboarding-sheet-with-our-real-data` signed out → **404**. That is the privacy boundary.
+
+`npm run db:reset` restores the seeded workspace.
 
 ---
 
@@ -176,56 +187,64 @@ npm run dev            # http://localhost:3000
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Framework | Next.js 15 App Router, React 19, TypeScript strict | Server components keep the board and lesson pages SEO-visible with no client data fetching; server actions remove a whole API surface. |
-| Styling | Tailwind v4 with a tokenised theme (`@theme`) | One source of truth for colour, radius, shadow and type; no design drift. |
-| Fonts | Fraunces (display) + Instrument Sans (text), self-hosted via `@fontsource` | No external font CDN — works offline, no layout shift, no cookie banner. |
-| Data | SQLite via Node's built-in `node:sqlite` | Zero-install, real SQL, real constraints. The schema is Postgres-shaped. |
-| Auth | Opaque session token in an httpOnly cookie, sessions table | Production-shaped; the provider swaps in behind `lib/auth.ts`. |
-| Validation | Zod, server-side authoritative | Client hints are ergonomics; the server is the contract. |
-| Email | Outbox table + renderer | The write path is real; only the transport is stubbed. |
+| Framework | Next.js 15 App Router, React 19, TypeScript strict | Server components keep private data on the server; server actions keep forms simple |
+| Styling | Tailwind v4 + CSS variables | Warm paper `#fbf7ef`, ink `#17251f`, brand `#0f6b4f`, accent `#cf7a1b`; Fraunces + Instrument Sans, self-hosted |
+| Data | `node:sqlite` (WAL, foreign keys on) | No service to provision; synchronous, so no N+1 waterfalls |
+| Validation | Zod at every write boundary | One schema per action, messages written for humans |
+| Media | YouTube click-to-load for public, signed link for private | Nothing third-party loads until asked; no external images in the build |
 
-### 4.2 Production swap points
+### 4.2 Swap points (the only files that know about infrastructure)
 
-Every production dependency is reachable through one module. This is deliberate: the plan can be executed without rewriting the product.
+| Concern | File | Swap to |
+| --- | --- | --- |
+| Storage | `lib/db.ts` | Postgres + Prisma (`DATABASE_URL`) |
+| Schema | `lib/schema.ts` | Prisma migrations; `COLUMN_MIGRATIONS` documents each additive step |
+| Queries | `lib/queries.ts` | Same shapes, different driver |
+| Writes | `lib/service.ts` + `lib/actions.ts` | Service layer is UI-free and testable |
+| Auth | `lib/auth.ts` | Resend magic links + Google OAuth; `findOrCreateUser` + `startSession` stay |
+| Email | `lib/notify.ts` (`deliver()`) | Resend or Postmark; `queueEmail()` already dedupes |
+| Payments | `lib/providers.ts` | Stripe / Paystack — `settle()` is provider-agnostic and idempotent |
+| Private media | `lib/signed-url.ts` | Mux / Cloudflare Stream playback tokens |
 
-| Concern | Today | Production | Touch only |
-| --- | --- | --- | --- |
-| Database | `node:sqlite`, `data/iwannalearn.db` | Postgres (Neon or Supabase) + Prisma migrations | `lib/db.ts`, `lib/queries.ts` |
-| Auth | Email → session row | Supabase Auth magic link + Google OAuth | `lib/auth.ts` (`getCurrentUser`, `startSession`, `findOrCreateUser`) |
-| Email | `outbox` table | Resend or Postmark, verified domain (SPF + DKIM + DMARC) | `queueEmail()` in `lib/actions.ts` |
-| Video (public) | YouTube embed, click-to-load | Unchanged | — |
-| Video (private) | Not enabled | Mux or Cloudflare Stream signed playback tokens | New module + `LessonPlayer` branch |
-| Payments | Not enabled | Stripe Checkout (international) + Paystack (NGN), webhook-verified | New `lib/payments.ts`, `entitlements`, `payments` tables |
-| File attachments | URL field | R2/S3 presigned PUT, MIME allow-list, virus scan | New route handler + storage service |
-| Realtime | Server renders | Supabase Realtime or SSE | `NotificationBell` |
-| Analytics | Server logs | PostHog (or Plausible) + Sentry | `app/layout.tsx` + instrumentation |
-
-### 4.3 Data model
+### 4.3 Data model (19 tables)
 
 ```
-users(id, email, name, role, notify_email, created_at)
+users(id, email, name, role, phone, notify_email, notify_via_sms, digest_opt_in,
+      email_verified_at, email_bounced_at, created_at)
 sessions(token, user_id, created_at, expires_at)
+login_tokens(token, email, name, next, consumed_at, expires_at, created_at)
 
-requests(id, ref, slug, title, goal, tried, context_link, deadline,
-         category, level, visibility, tier, status, decline_reason,
+requests(id, ref, slug, title, goal, tried, context_link, deadline, category, level,
+         visibility, tier, status, decline_reason, moderation_flag, moderation_note,
+         price_kobo, payment_status, revision_state, delivery_confirmed_at,
          upvote_count, priority_flag, created_by, created_at, updated_at, fulfilled_at)
-request_upvotes(request_id, user_id, created_at)      -- PK(request_id, user_id)
+request_upvotes(request_id, user_id, created_at)          -- PK(request_id, user_id)
 request_events(id, request_id, kind, from_status, to_status, message, actor, created_at)
-replies(id, request_id, kind, message, video_url, video_id, video_title,
-        video_provider, video_length, resources, created_by, created_at, seen_at)
+replies(id, request_id, kind, message, video_url, video_id, video_title, video_provider,
+        video_length, resources, reused_from, created_by, created_at, seen_at)
 notifications(id, user_id, request_id, kind, title, body, href, read_at, created_at)
+notification_logs(id, outbox_id, provider, channel, status, attempts, last_error,
+                  idempotency_key UNIQUE, to_email, subject, created_at, updated_at)
+outbox(id, request_id, to_email, subject, body, html, status, provider, created_at)
 feedback(id, request_id, user_id, helpful, comment, created_at)  -- UNIQUE(request_id, user_id)
-outbox(id, request_id, to_email, subject, body, status, provider, created_at)
-settings(key, value)
+payments(id, request_id, user_id, provider, reference UNIQUE, kind, amount_kobo, tax_kobo,
+         currency, status, checkout_url, paid_at, refunded_at, created_at, updated_at)
+entitlements(id, user_id, request_id, access_type, granted_at, revoked_at)  -- UNIQUE(user,request)
+analytics_events(id, name, user_id, request_id, props, created_at)
+search_queries(id, term, results, user_id, created_at)
+rate_limits(key PK, window_start, count)
+support_messages(id, user_id, email, subject, body, status, created_at)
+uploads(id, request_id, user_id, filename, mime, size, storage_key, created_at)
+settings(key PK, value)
 ```
 
-Differences from the PDF's Prisma sketch, and why:
+**Decisions that matter:**
 
-- `replies.kind` (`external` / `internal`) replaces a separate notes table. One thread, two visibilities, one index — and internal notes are excluded at query level rather than filtered in the view.
-- `request_events` is added. The blueprint asks for status history; without an event log, "who moved this and why" is unanswerable.
-- `outbox` is added. It is the observational layer for the most critical action in the product.
-- `feedback` is added. It closes the quality loop and gives the creator a signal that is not vanity metrics.
-- `tier` and `visibility` are separate. Priority is public *and* paid; private is private *and* paid. Collapsing them makes "why can't I see that video?" unanswerable.
+- `replies.kind` (`external` / `internal`) instead of a notes table — one thread, two visibilities, filtered at query level.
+- `tier` and `visibility` are deliberately separate: priority is public *and* paid; private is private *and* paid. Collapsing them makes "why can't I see that video?" unanswerable.
+- Money is **integer kobo**, never floats. `amount_kobo` is what is charged; `tax_kobo` is the portion of it, not an add-on.
+- `entitlements` is the access truth; `payments` is the money truth. A refund writes one row each way and neither has to guess.
+- `notification_logs` is separate from `outbox` because one is "what we said" and the other is "what happened when we tried".
 
 ### 4.4 The status machine
 
@@ -237,342 +256,357 @@ submitted ──► under_review ──► planned ──► in_production ─�
     └──────────────┴──────► waitlisted ◄─────────┘
 ```
 
-| Internal | Learner sees | What it means | Who moves it |
+| Internal | Learner sees | Meaning | Moved by |
 | --- | --- | --- | --- |
 | `submitted` | Received | In the queue for a first look | system |
-| `under_review` | Being checked | Details verified, scope confirmed | creator |
-| `planned` | Scheduled | Has a filming slot | creator |
-| `in_production` | Being filmed | Being recorded now | creator |
-| `waitlisted` | On the waitlist | Over capacity; keeps its place | creator / system |
-| `fulfilled` | Lesson ready | Video published | system (on publish) |
-| `declined` | Not this time | Won't be made; reason is shown | creator (reason required) |
+| `under_review` | Being checked | Details verified; private scopes live here | creator / system |
+| `planned` | Scheduled | Has a filming slot | creator / auto-promotion |
+| `in_production` | Being filmed | Recording now | creator |
+| `waitlisted` | On the waitlist | Over weekly capacity; keeps its place | system / creator |
+| `fulfilled` | Lesson ready | Video published | system (publish) |
+| `declined` | Not this time | Won't be made; reason shown and emailed | creator (reason required) |
 
-Invariants enforced in the write path: publishing a lesson always yields `fulfilled` with a `fulfilled_at`; a decline always carries a reason that is shown to the learner and emailed; every transition writes an event.
+Invariants enforced in the write path (and asserted by `npm run smoke`): publish always sets `fulfilled` + `fulfilled_at`; decline always carries a reason; every transition writes an event; every request has a `created` event; statuses are drawn only from the set above.
 
 ### 4.5 Who can read what
 
-| Row | Public visitor | Learner (owner) | Learner (other) | Creator |
+| Row | Visitor | Owner | Other learner | Creator |
 | --- | --- | --- | --- | --- |
-| Public open request | read | read | read | read + write |
-| Public fulfilled lesson | read | read | read | read + write |
+| Public request / lesson | read | read | read | read + write |
 | Private request | ✗ 404 | read | ✗ 404 | read + write |
+| Private video (`/watch`) | ✗ | signed link only | ✗ | signed link |
 | Internal note | ✗ | ✗ | ✗ | read |
-| Another learner's email | ✗ | ✗ | ✗ | read (admin only) |
-| Outbox | ✗ | ✗ | ✗ | read |
+| Payment / entitlement | ✗ | own | ✗ | all |
+| Outbox, support, analytics | ✗ | ✗ | ✗ | read |
 
-Enforcement today is in the query layer (`visibility = 'public'` in every board/library query; an explicit owner/creator check on the detail route). Phase B replaces this with Postgres RLS **plus a test suite that proves a second user cannot read another's private request or internal note** — a hard gate before public launch.
+Four gates guard private playback: signed in → token signature and expiry → active entitlement → token bound to *this* viewer. A refund revokes the entitlement, which closes the door even on an unexpired link.
 
-### 4.6 Notification matrix
+### 4.6 Money flow
+
+```
+create request (tier=private)        → status under_review, payment_status none
+owner presses "Continue to checkout" → payments(row, pending) + requests.price_kobo
+provider page / mock checkout        → learner presses pay
+settle(reference)                    → payments.paid  ─┬─► entitlements(grant)
+                                                       ├─► receipt email (idempotent)
+                                                       └─► bell notification + event
+lesson published                     → learner notified, revision window opens
+learner confirms / asks revision      → revision_state closed | requested (one only)
+creator refunds                      → payments.refunded + entitlement revoked + both notified
+```
+
+The webhook is the only place money is ever confirmed: it verifies the signature over the raw body, compares the amount to what was asked for, and calls `settle()`, which is idempotent by reference. A browser redirect never grants anything.
+
+### 4.7 Notification matrix
 
 | Event | Requester | Upvoters | Creator | Channels |
 | --- | --- | --- | --- | --- |
 | Request submitted | ✅ confirmation + next steps | — | — | email + bell |
-| Moved to review / planned / filming | ✅ quiet update | — | — | bell |
-| Waitlisted | ✅ with honest ETA | — | ✅ | email + bell |
+| Waitlisted | ✅ honest reason + auto-promotion promise | — | ✅ | email + bell |
+| Promoted from waitlist | ✅ | — | — | email + bell |
+| Status moved | ✅ quiet update | — | — | bell |
 | Lesson published | ✅ "your lesson is ready" | ✅ "a lesson you backed is ready" | — | email + bell |
-| Declined | ✅ reason + alternative | — | — | email + bell |
-| Feedback received | — | — | ✅ (dashboard score) | in-app |
+| Private delivered | ✅ "your private lesson is ready" + signed link | — | — | email + bell |
+| Declined | ✅ reason + policy link | — | — | email + bell |
+| Payment received | ✅ receipt with VAT line | — | ✅ | email + bell |
+| Refund issued | ✅ access closed | — | — | email + bell |
+| Revision requested | — | — | ✅ | bell |
+| Delivery confirmed | — | — | ✅ | bell |
+| Support message | ✅ acknowledgement | — | ✅ | email |
 
-Every email is idempotent per (request, recipient, event) by construction in this build; the provider integration must add an explicit idempotency key before retries are enabled.
+Every email carries a deterministic idempotency key (`received:<id>`, `lesson:<req>:<user>:<video>`, `receipt:<ref>`, `refund:<ref>`, `promoted:<id>`, `digest:<week>`, `login:<token>`), so retries and double-clicks cannot double-send.
 
 ---
 
 ## 5. What "very easy to use" means here
 
-The brief asks for a product that is easy and friendly. That is not a coat of paint; it is twelve rules, each of which is implemented and testable.
+Fourteen rules, each implemented somewhere a reviewer can point at.
 
-| # | Rule | Where it lives |
+| # | Rule | Where |
 | --- | --- | --- |
-| 1 | **No jargon.** Users never see "ticket", "SLA", "entity" or "workflow". The word is *request*, the state is a sentence. | `lib/status.ts` holds the only vocabulary |
-| 2 | **One clear next action per screen.** Every page ends with a single primary button; empty states carry exactly one. | `EmptyState`, all pages |
-| 3 | **Explain every field.** Each input has a helper line saying why it is asked. | Wizard, sign-in, admin reply form |
-| 4 | **Coach instead of reject.** A vague title isn't blocked — it earns a nudge with an example rewrite. | `RequestWizard` specificity check |
-| 5 | **Prevent duplicate work before it happens.** Matching requests surface *while typing*, with a one-tap "me too". | `SimilarRequests`, `/api/search` |
-| 6 | **Never lose the user's words.** The wizard autosaves to `localStorage` and restores with a visible note. | `RequestWizard` |
-| 7 | **Show honest state.** A 5-step timeline, plain-language blurbs, and a real "typical wait" line — no fake progress bars. | `StatusTimeline` |
-| 8 | **Say what happens next, before it happens.** The wizard's rail and the post-submit panel both spell out the four steps. | `RequestWizard` aside, request detail |
-| 9 | **Two channels, always.** The bell exists so a spam folder cannot break the relationship. | `NotificationBell`, `notify()` |
-| 10 | **Respect attention.** Nothing third-party loads until asked: YouTube is click-to-load, no tracking scripts, no cookie banner. | `LessonPlayer` |
-| 11 | **Mobile first, thumb first.** Bottom tab bar with the ask action in the centre, 44px+ targets, sticky primary actions. | `MobileTabBar`, spacing scale |
-| 12 | **Accessible by default.** Semantic landmarks, skip link, visible focus rings, `aria-pressed` on votes, `aria-live` toasts, labelled SVGs, reduced-motion support, AA contrast. | global |
+| 1 | **No jargon.** Never "ticket", "SLA", "workflow". It is a *request*; states are sentences. | `lib/status.ts` |
+| 2 | **One primary action per screen.** | every page, `EmptyState` |
+| 3 | **Explain every field.** Each input says why it is asked. | wizard, sign-in, admin forms |
+| 4 | **Coach, don't reject.** A vague title earns a nudge with an example rewrite. | wizard specificity check |
+| 5 | **Prevent duplicate work before it exists.** Matches surface while typing. | `/api/search`, wizard |
+| 6 | **Never lose the user's words.** Draft autosaves and restores with a note; it clears only after a successful send. | `RequestWizard` |
+| 7 | **Honest state, never fake progress.** Capacity overflow says "waitlist" out loud, and the email says why. | intake, status timeline |
+| 8 | **Say what happens next before it happens.** | wizard rail, request page |
+| 9 | **Two channels, always.** A spam folder cannot break the relationship. | bell + email |
+| 10 | **Respect attention.** Nothing third-party loads until asked; no cookie banner because no trackers. | `LessonPlayer` |
+| 11 | **Mobile first, thumb first.** Bottom bar with the ask action centred; 44px targets. | `MobileTabBar` |
+| 12 | **Money is never a surprise.** Price, VAT and scope appear before the pay button; nothing is charged at request time. | `/pricing`, checkout, wizard |
+| 13 | **Every wait has an end.** Waitlist promises automatic promotion; digest day is stated. | intake, settings |
+| 14 | **Accessible by default.** Landmarks, skip link, visible focus, `aria-current`, `aria-live`, labelled icons, reduced motion, AA contrast. | global |
 
-**Accessibility checklist** (verified in code, to be re-verified in QA): keyboard reachable everywhere · focus visible on every interactive element · form errors announced (`role="alert"`) · no colour-only status (every pill has a word) · `prefers-reduced-motion` honoured · fonts self-hosted at 16px base with 1.55 line-height.
+**Accessibility checklist:** keyboard-complete · focus visible · errors announced · no colour-only status · `prefers-reduced-motion` honoured · 16px base, 1.55 line-height · no `aria-hidden` on links · tab-role links replaced with `aria-current` navigation.
 
 ---
 
 ## 6. The roadmap
 
-Each task carries **why**, **achieves**, **connects to** and **acceptance** — the format the source documents asked for. A task is done when its acceptance criteria pass, not when code exists.
+Each task carries *why*, *what it achieves*, *connections* and *acceptance*. A task is done when its acceptance criteria pass — not when code exists.
 
-### Phase A — Foundation & the core loop ✅
-
-*Goal: a stranger can learn, ask, vote, track and be notified — unaided, on a phone.*
+### Phase A — Foundation and the core loop ✅
 
 | ID | Status | Task | Why / achieves | Acceptance |
 | --- | --- | --- | --- | --- |
-| A1 | ✅ | Relational schema with enums, FKs, indexes | Makes every later feature additive rather than a migration project | Schema applies clean; indexes on status, visibility, votes, owner |
-| A2 | ✅ | Cookie sessions + roles | Protects private data and the creator endpoints | Session survives refresh; creator routes reject learners |
-| A3 | ✅ | Public board and library with search + filters | Social proof and duplicate reduction | Signed-out read works; filters are URL-shareable |
-| A4 | ✅ | Guided 4-step request wizard | Request structure is the highest-leverage quality lever | Submits in < 60 s on mobile; server-side validation with field-level messages |
-| A5 | ✅ | Upvote toggle with unique constraint | Defensible demand signal | Double click cannot double-count; count matches DB |
-| A6 | ✅ | Status machine + event log + timeline | Trust through transparency | Every transition writes an event visible to the owner |
-| A7 | ✅ | Creator queue cockpit | A single daily operational screen | Sorted by tier → pin → votes → age; filters and search |
-| A8 | ✅ | Reply composer with YouTube validation | Friction here costs hours every week | Invalid URLs rejected with a clear message; publish in under 60 s |
-| A9 | ✅ | Notify requester + all upvoters on publish | The fulfilment payoff | One bell entry and one outbox row per person, verified |
-| A10 | ✅ | In-app notification bell | The fallback channel | Unread count accurate; marks read on demand |
-| A11 | ✅ | Feedback loop | Closes the quality loop | One tap, comment optional, visible in the studio |
-| A12 | ✅ | Private isolation | Legal and trust baseline | Private request 404s for non-owners (verified) |
-| A13 | ✅ | SEO: metadata, JSON-LD, sitemap, robots | Compounding acquisition | Lessons indexable; sitemap lists public lessons only |
-| A14 | ✅ | Seeded workspace + `db:reset` | An empty database hides layout bugs | 13 requests across all states, 4 lessons, votes, notifications |
+| A1 | ✅ | Relational schema, enums, FKs, indexes | Every later feature is additive, not a rewrite | Schema applies clean; indexes on status, visibility, votes, owner |
+| A2 | ✅ | Cookie sessions + roles | Protects private data and creator routes | Session survives refresh; `/admin` redirects non-creators |
+| A3 | ✅ | Public board and library with search + filters | Social proof; duplicate reduction | Signed-out read works; filters URL-shareable |
+| A4 | ✅ | Guided 4-step wizard | Request structure is the highest-leverage quality lever | Submit in <60 s on mobile; server-side field errors |
+| A5 | ✅ | Upvote toggle with unique constraint | Defensible demand signal | Double click cannot double-count |
+| A6 | ✅ | Status machine + event log + timeline | Trust through transparency | Every transition writes an event |
+| A7 | ✅ | Creator queue cockpit | One daily operating screen | Sorted by tier → pin → votes → age; filters + search |
+| A8 | ✅ | Reply composer with YouTube parsing | Friction here costs hours weekly | Invalid URLs rejected clearly; publish <60 s |
+| A9 | ✅ | Notify requester + all upvoters | The fulfilment payoff | One bell + one outbox row per person |
+| A10 | ✅ | In-app bell | Fallback channel | Unread count accurate |
+| A11 | ✅ | Feedback loop | Closes the quality loop | One tap; visible in studio |
+| A12 | ✅ | Private isolation | Legal and trust baseline | Private request 404s for non-owners (smoke-asserted) |
+| A13 | ✅ | SEO: metadata, JSON-LD, sitemap, robots | Compounding acquisition | Only public lessons in `sitemap.xml` |
+| A14 | ✅ | Seed + `db:reset` | Empty databases hide layout bugs | 18 requests, 9 lessons, votes, payments, entitlements |
 
-### Phase B — Production foundation & trust ⏳
+### Phase B — Production foundation and trust ⏳
 
-*Goal: the same product on infrastructure that can take real users and real money safely. Exit criterion: RLS tests pass, auth is real, uploads are safe.*
+*Goal: the same product on infrastructure that can take real users safely. Exit: RLS proof suite passes, auth is real, uploads are safe.*
 
-| ID | Status | Task | Why / achieves | Connects to | Effort | Role |
-| --- | --- | --- | --- | --- | --- | --- |
-| B1 | ⏳ | Provision Postgres (Neon/Supabase), two environments | One managed backend; dev/prod parity | B2–B4 | S | OPS |
-| B2 | ⏳ | Port the schema to Prisma and run the seed through it | Removes driver-specific SQL; migrations become reviewable | B3 | M | BE |
-| B3 | ⏳ | Replace the SQLite driver behind `lib/db.ts` | Proves the swap-point claim in §4.2 | all | M | BE |
-| B4 | ⏳ | RLS policies: public read, own-private read, owner insert, creator bypass | Security by default; one missing policy leaks everything | B5 | M | BE |
-| B5 | ⏳ | **RLS test suite** (pgTAP or scripted SQL) — second user cannot read a private request or an internal note | This is a hard gate, not a nice-to-have | G1 | M | QA+BE |
-| B6 | ⏳ | Real magic-link auth (Resend) + Google OAuth | Passwordless removes the top signup drop-off | A2 | M | FE+BE |
-| B7 | ⏳ | Human-readable auth errors, session refresh, rate-limited link requests | Removes support burden | B6 | S | FE |
-| B8 | 📋 | Presigned uploads for screenshots/files (R2 or S3) | Requests about real files need real files | A4 | M | BE |
-| B9 | 📋 | MIME allow-list, size cap, EXIF strip, retention rule | Uploads are the largest new attack surface | B8 | S | BE+OPS |
-| B10 | 📋 | Automated status-transition tests (unit) | Prevents silent state corruption | A6 | S | QA |
-| B11 | 📋 | CI: lint, typecheck, migration dry-run on every PR | Schema drift is the top cause of "works locally" | B1 | M | OPS |
-| B12 | 📋 | Account deletion + data export | Promised in the privacy page | A12 | M | BE |
+| ID | Status | Task | Why / achieves | Connects to |
+| --- | --- | --- | --- | --- |
+| B1 | ⏳ | Provision Postgres (Neon/Supabase), two environments | Managed backend, dev/prod parity | B2–B4 |
+| B2 | ⏳ | Port schema to Prisma + run the seed | Reviewable migrations | B3 |
+| B3 | ⏳ | Replace the driver behind `lib/db.ts` | Proves the swap-point claim | all |
+| B4 | ⏳ | RLS policies: public read, own-private read, owner insert, creator bypass | Security by default | B5 |
+| B5 | ⏳ | **RLS test suite** — a second user cannot read a private request or an internal note | Hard gate G1 | G1 |
+| B6 | ✅ | Real magic-link auth | Passwordless removes the top signup drop-off | A2 |
+| B7 | ✅ | Human-readable auth errors, rate-limited link requests | Removes support burden | B6 |
+| B8 | 📋 | Presigned uploads (R2/S3) using `uploads` | Requests about real files need real files | A4 |
+| B9 | 📋 | MIME allow-list, size cap, EXIF strip, retention | Uploads are the biggest new attack surface | B8 |
+| B10 | ✅ | Automated invariant tests | Prevents silent state corruption | A6 |
+| B11 | 🔄 | CI: typecheck + smoke on every PR | Schema drift is the top "works locally" cause | B1 |
+| B12 | ✅ | Account deletion + data export | Promised in the privacy page | A12 |
 
 ### Phase C — Notification reliability ⏳
 
-*Goal: no reply is ever lost. Exit criterion: an end-to-end test proves reply → delivered email → bell → click-through.*
+| ID | Status | Task | Why / achieves | Acceptance |
+| --- | --- | --- | --- | --- |
+| C1 | ⏳ | Resend/Postmark with a verified domain (SPF, DKIM, DMARC) | Email is the return trigger | Inbox placement verified in three clients |
+| C2 | ✅ | Templates with plain-text alternatives | Works with images blocked | One module produces both |
+| C3 | ✅ | Idempotency keys per (request, recipient, event) | Retries never double-send | Replay produces one message |
+| C4 | 🔄 | Delivery webhook → `notification_logs`, retries with backoff | You must know when the loop breaks | Forced bounce appears within 60 s (simulated today) |
+| C5 | ✅ | Bounce suppression + failing-email banner | A dead address must not silently kill a request | Suppressed address is in-app only |
+| C6 | ✅ | Weekly creator digest | Trends without dashboard-checking | Idempotent per week; creator + opted-in learners |
+| C7 | 📋 | Optional WhatsApp/SMS for "lesson ready" (Termii/Twilio) | Bypasses clogged inboxes | Opt-in honoured; cost logged |
 
-| ID | Status | Task | Why / achieves | Acceptance | Effort | Role |
-| --- | --- | --- | --- | --- | --- | --- |
-| C1 | ⏳ | Resend/Postmark integration with a verified domain (SPF, DKIM, DMARC) | Email is the primary return trigger | Inbox placement confirmed in Gmail, Outlook and one mobile client | M | OPS+BE |
-| C2 | ⏳ | React Email templates with plain-text alternatives | Renders with images blocked; survives dark mode | Template renders in all three clients | M | FE |
-| C3 | ⏳ | Idempotency keys per (request, recipient, event) | Retries must never double-send | Replay produces exactly one message | S | BE |
-| C4 | ⏳ | Delivery webhook → `notification_logs`, retry with backoff | You must know when the loop breaks | A forced bounce appears in the admin within 60 s | M | BE |
-| C5 | ⏳ | Bounce suppression + "your email is failing" banner in the bell | A dead address must not silently kill a request | Suppressed address shows in-app only | S | BE+FE |
-| C6 | 📋 | Weekly creator digest | Demand trends without dashboard-checking | Monday email: new requests, top votes, delivered, median time | S | BE |
-| C7 | 📋 | Optional WhatsApp/SMS for "lesson ready" (Termii/Twilio) | Bypasses clogged inboxes | Opt-in, per-user preference honoured, cost logged | M | BE |
-
-### Phase D — Creator operations & reuse 📋
-
-*Goal: fulfilment scales without proportionally more filming. Trigger: queue > 10 active.*
-
-| ID | Status | Task | Why / achieves | Connects to | Effort |
-| --- | --- | --- | --- | --- | --- |
-| D1 | 📋 | "Reply with an existing lesson" picker | The single biggest creator-load reduction available | A8 | M |
-| D2 | 📋 | Searchable lesson library with usage counts | Reuse requires findability | D1 | M |
-| D3 | 📋 | Auto-suggest existing lessons *before* a duplicate request is filed | Prevents work rather than absorbing it | A4 | M |
-| D4 | 📋 | Capacity-aware intake: overflow auto-waitlists with an emailed estimate; auto-promote on free capacity | Silent backlog destroys trust faster than an honest wait | A7 · C1 | M |
-| D5 | 📋 | Scope lock: "new scope = new request" surfaced on paid tiers | Protects the margin | G3 | S |
-| D6 | 📋 | Moderation queue for private requests (pending_review before production) | Prohibited categories must never reach filming | A6 | S |
-| D7 | 📋 | Creator-side templates: declined reasons, clarification messages | Consistency at volume | A6 | S |
-
-### Phase E — Retention, growth & measurement ⏳
-
-| ID | Status | Task | Why / achieves | Acceptance | Effort |
-| --- | --- | --- | --- | --- | --- |
-| E1 | ⏳ | Analytics: request start/complete, search-with-no-results, watch start, feedback, 7-day return | You cannot optimise what you don't measure; no PII in payloads | Dashboard shows the funnel; events documented | M |
-| E2 | ⏳ | Error monitoring (Sentry) on actions, email, auth | Silent failures kill trust faster than loud ones | Alerts reach a phone | S |
-| E3 | ⏳ | Rate limiting + CAPTCHA on submit/upvote/auth | Spam tickets are cheap to send and expensive to triage | 21st submission in an hour is blocked with a human message | M |
-| E4 | 📋 | Failed-search → demand capture: a search with no results offers "ask for this" | Turns disappointment into a request | Offer appears on zero-result search | S |
-| E5 | 📋 | "Similar open requests" on the detail page | Keeps sessions alive and votes flowing | 3 related shown, own excluded | S |
-| E6 | 📋 | Accessibility audit + fixes (screen reader pass, contrast, focus order) | The friendliness claim must hold for keyboard and screen readers | Zero critical findings in a manual pass | M |
-| E7 | 📋 | Performance budget: LCP < 2.5 s on 4G, CLS < 0.1, JS < 200 kB on content routes | Slow is unfriendly | Lighthouse ≥ 95 perf/SEO/a11y on `/` and `/tutorials/*` | M |
-| E8 | 📋 | Learning paths once ≥ 14 lessons exist | Increases depth without more filming | Path pages ship with 3+ lessons each | L |
-
-### Phase F — Private beta & launch 📋
+### Phase D — Creator operations and reuse ✅
 
 | ID | Status | Task | Why / achieves | Acceptance |
 | --- | --- | --- | --- | --- |
-| F1 | 📋 | Invite 20 learners from the waitlist | Controlled environment to catch real bugs | 20 invitees, 10+ requests, 5+ lessons, 3 interviews |
-| F2 | 📋 | Seed the library with 8 starter lessons before opening the doors | An empty library reads as a dead product | 8 public lessons at launch |
-| F3 | 📋 | Launch checklist (Appendix E) signed off | Prevents launching with a broken loop | All 10 checks pass on production |
-| F4 | 📋 | Support inbox + response templates + a 24 h SLA | "Who do I ask?" must have an answer | Reply templates live; inbox monitored |
-| F5 | 📋 | Legal review of privacy, terms, not-covered, refund policy | Required before payment | Lawyer sign-off recorded |
-| F6 | 📋 | Ops runbook: refund, takedown, leaked private video, provider outage | Recoverability is part of the product | Runbook exists and is rehearsed once |
+| D1 | ✅ | "Send an existing lesson" | Biggest available reduction in creator load | Reuse publishes and notifies |
+| D2 | ✅ | Searchable library with usage counts | Reuse needs findability | Counts increment on reuse |
+| D3 | ✅ | Suggest existing lessons before a duplicate is filed | Prevents work rather than absorbing it | Wizard shows matches while typing |
+| D4 | ✅ | Capacity-aware intake + auto-promotion | Silent backlog destroys trust faster than an honest wait | Over capacity → waitlisted email; publish promotes the top of the list |
+| D5 | ✅ | Scope lock: "new scope = new request" on paid tiers | Protects the margin | Copy appears on pricing, checkout and request page |
+| D6 | ✅ | Moderation queue for flagged requests | Prohibited categories must never reach filming | Flag + reason stored; decision recorded |
+| D7 | ✅ | Decline reason templates | Consistency at volume | One-tap reasons, emailed verbatim |
 
-### Phase G — Monetisation 🚫 (gated)
+### Phase E — Retention, growth and measurement 🔄
 
-Gate G2: only after Phase F metrics show a healthy free loop (≥ 70% fulfilment, ≥ 80% helpfulness, 7-day return ≥ 20%).
+| ID | Status | Task | Why / achieves | Acceptance |
+| --- | --- | --- | --- | --- |
+| E1 | ✅ | Analytics: searches, zero-results, requests, plays, feedback, return | Cannot optimise what is not measured; no PII | Studio shows funnel + gaps |
+| E2 | 📋 | Error monitoring (Sentry) on actions, email, auth | Silent failures kill trust | Alerts reach a phone |
+| E3 | 🔄 | Rate limiting | Spam is cheap to send, expensive to triage | 11th request/hour blocked (CAPTCHA still pending) |
+| E4 | ✅ | Zero-result search → "file this request" | Turns disappointment into demand | Gaps list links to the wizard |
+| E5 | ✅ | Similar requests on detail | Keeps sessions and votes flowing | Three related, own excluded |
+| E6 | 🔄 | Accessibility audit | The friendliness claim must hold for keyboards and screen readers | Zero critical findings in a manual pass |
+| E7 | 📋 | Performance budget: LCP <2.5 s, CLS <0.1, JS <200 kB | Slow is unfriendly | Lighthouse ≥95 perf/SEO/a11y |
+| E8 | 📋 | Learning paths once ≥14 lessons | Depth without more filming | Three paths with 3+ lessons |
 
-| ID | Status | Task | Why / achieves | Acceptance | Effort |
-| --- | --- | --- | --- | --- | --- |
-| G1 | 🚫 | Fixed-price products: Priority (₦4,000) and Private (from ₦25,000) | Quoting adds a whole state machine and support load | Two products live; price and scope text match the policy exactly | M |
-| G2 | 🚫 | Stripe Checkout (international) + Paystack (NGN) | Payments must match the operating country's real capabilities | Checkout completes in both test modes; receipts correct | L |
-| G3 | 🚫 | Webhook handler: verify signature, idempotent grant, transactional status flip | Never treat a browser redirect as proof of payment | Replayed event grants exactly once; forged event rejected | M |
-| G4 | 🚫 | Entitlements + payments tables, RLS on both | Access must be revocable | A refunded user loses access automatically | M |
-| G5 | 🚫 | **Signed-URL video hosting** (Mux or Cloudflare Stream) | Unlisted YouTube is not private | A direct URL fails outside an authenticated session; tokens expire | L |
-| G6 | 🚫 | Delivery confirmation + 7-day revision window | The primary chargeback defence | Window enforced server-side; one revision included | L |
-| G7 | 🚫 | Refund/dispute webhooks → revoke + notify both parties | Must be automatic, not discovered by email | Refund flips entitlement within one webhook | M |
-| G8 | 🚫 | Tax (Stripe Tax) + invoices | Cross-border digital sales trigger VAT obligations | Tax lines appear on invoices | M |
-| G9 | 🚫 | "What private means" one sentence at checkout | Prevents refund disputes | Copy matches §1 verbatim | S |
+### Phase F — Private beta and launch 📋
+
+| ID | Status | Task | Why / achieves |
+| --- | --- | --- | --- |
+| F1 | 📋 | Invite 20 learners from the waitlist | Controlled environment to find real bugs |
+| F2 | 🔄 | Seed the library with 8 starter lessons | 9 exist in seed; they must be real, not placeholders |
+| F3 | 📋 | Launch checklist (Appendix E) signed off | Prevents launching with a broken loop |
+| F4 | ✅ | Support inbox + acknowledgement | "Who do I ask?" has an answer |
+| F5 | 🔄 | Legal review of privacy, terms, refund policy | Required before charging; drafts are written |
+| F6 | 📋 | Ops runbook: refund, takedown, leaked private video, provider outage | Recoverability is part of the product |
+
+### Phase G — Monetisation ✅ (built, gated)
+
+The code exists; the *switch* is gated by `payments_mode` and by G1–G3.
+
+| ID | Status | Task | Why / achieves | Acceptance |
+| --- | --- | --- | --- | --- |
+| G1 | ✅ | Fixed-price products: Priority ₦4,000, Private from ₦25,000 | Quoting adds a state machine and support load | Price and scope copy match policy |
+| G2 | 🔄 | Stripe Checkout (international) + Paystack (NGN) | Payments must match the country's real rails | Adapters written; live keys required |
+| G3 | ✅ | Webhook: verify signature, idempotent grant, status flip | Never treat a redirect as proof of payment | Replay grants once; forged rejected; amount mismatch 409 |
+| G4 | ✅ | `payments` + `entitlements` | Access must be revocable | Refund revokes access automatically |
+| G5 | 🔄 | Signed playback for private video | Unlisted YouTube is not private | Expired or foreign link refused (verified) |
+| G6 | ✅ | Delivery confirmation + revision window | Primary chargeback defence | Window enforced server-side; one revision |
+| G7 | 🔄 | Refund → revoke + notify both parties | Must be automatic, not discovered by email | Implemented locally; provider webhook to wire |
+| G8 | 🔄 | VAT + invoice lines | Cross-border digital sales carry VAT obligations | Inclusive VAT split on checkout, receipt, admin; Stripe Tax pending |
+| G9 | ✅ | "What private means" at checkout | Prevents refund disputes | Copy matches §1 |
 
 ### Phase H — Scale 📋
 
-Community creators with revenue share · subject-matter review · course bundles · team/enterprise training · localisation (Pidgin/Yoruba/Hausa/French) · native apps · recommendation engine. **Explicitly deferred** (per Document A): native app, AI recommendation engine, marketplace, live chat, subscriptions, automated video creation, gamification economies.
+Community creators with revenue share · subject-matter review · course bundles · team training · localisation (Pidgin/Yoruba/Hausa/French) · native apps · recommendation engine. **Explicitly deferred:** native app, AI recommendations, marketplace, live chat, subscriptions, automated video generation, gamification.
 
 ---
 
 ## 7. Hard gates
 
-| Gate | Condition | Blocks |
+| Gate | Requirement | State |
 | --- | --- | --- |
-| **G1** | RLS (or equivalent) test suite proves private requests and internal notes are unreadable by a second user | Any public launch |
-| **G2** | Free loop is healthy: ≥ 70% fulfilment, ≥ 80% helpfulness, ≥ 20% 7-day return, ≥ 8 lessons | Any payment code |
-| **G3** | Signed-URL private hosting live **and** lawyer-reviewed terms published | Accepting money for private lessons |
+| **G1** | Ownership is *proven*, not assumed: RLS policy suite shows a second user cannot read another's private request, internal note, payment or entitlement | 🔄 App-layer checks pass (smoke asserts the 404). Postgres RLS pending (B4/B5) |
+| **G2** | The free loop works before charging: ≥70% fulfilment, ≥80% helpfulness, ≥20% 7-day return, ≥8 lessons | ⏳ Instrumented (studio shows all four); needs 4 weeks of real traffic |
+| **G3** | Private charging is safe: signed/expiring playback, revocable access, lawyer-reviewed terms | 🔄 Signed links + revocation done; legal review outstanding (F5) |
 
-A gate is not a suggestion. Each one exists because the failure it prevents is expensive and public: a data leak, a chargeback wave, or a paid customer discovering their "private" video is shareable.
+**The rule that matters:** money does not switch on because the code is ready. It switches on when G2 says people are already getting what they asked for.
 
 ---
 
 ## 8. Risk register
 
-| Risk | Impact | Mitigation in this build | Remaining work |
+| Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- |
-| Creator queue overload | Trust collapse | Capacity setting + waitlist state + reusable public lessons | Auto-promotion (D4) |
-| Email lands in spam | Loop breaks silently | Two channels; bell; outbox visible | Verified domain + bounce logging (C1, C4) |
-| Vague requests | Wasted filming hours | Wizard prompts, specificity nudge, examples, duplicate matcher | Clarification template (D7) |
-| Duplicate requests | Wasted effort | Live duplicate matching + votes | Trigram matching on Postgres |
-| Scope creep on paid work | Margin death | Tier copy + review step | Scope-lock wording at checkout (D5) |
-| Prohibited content (medical/legal/financial/hacking) | Legal liability | Not-covered list published and linked from declines; decline reason required | Moderation queue (D6) |
-| Chargebacks on custom digital goods | Revenue loss | Feedback + delivery confirmation shape | Revision window + refund terms (G6) |
-| Private video leakage | Refund + trust | Private requests never listed | Signed URLs (G5) |
-| Sales tax / VAT exposure | Compliance | Pricing in NGN, tax stated as pending | Stripe Tax (G8) |
-| Single-operator bus factor | Product stops | Everything is in one runbook-able repo | Ops runbook (F6), second creator (H) |
+| One creator becomes the bottleneck | High | High | Capacity cap + honest waitlist; reuse library; digest shows queue |
+| Private video leaks via a forwarded link | Medium | High | Signed 15-min account-bound links; refund revokes; runbook for takedown |
+| Payment webhook spoofed or replayed | Medium | High | Signature over raw body, amount check, idempotent settle, event log |
+| Refund dispute over scope | Medium | Medium | Written scope before payment; one revision; confirmation closes the request |
+| Email lands in spam and the loop silently breaks | Medium | High | Two channels; bounce suppression; admin outbox |
+| Prohibited topic reaches filming | Medium | High | Keyword screen + moderation queue with recorded decision |
+| SQLite write contention | Low today | Medium | WAL; swap point ready (B3) |
+| "Free forever" promise broken by later monetisation | Medium | Medium | Public lessons stay free; only speed and exclusivity are sold |
+| Scope creep in the request itself | High | Medium | Specificity nudge, scope lock, decline-with-reason |
 
 ---
 
 ## 9. Metrics
 
-Targets are set after the first 20-user pilot; these are the initial hypotheses.
-
-| Metric | Why it matters | Target |
+| Metric | Target | Where it is now |
 | --- | --- | --- |
-| Request → lesson completion rate | Whether requests actually get fulfilled | ≥ 70% |
-| Median time to first response | Whether learners feel acknowledged | ≤ 2 working days |
-| Median time to delivery (community) | Whether capacity meets demand | ≤ 10 days |
-| Duplicate-avoidance rate (votes on existing ÷ total submissions) | Whether the matcher prevents duplicate filming | ≥ 50% |
-| Lesson helpfulness | Whether videos solve the actual problem | ≥ 80% |
-| 7-day return rate | Whether the loop retains | ≥ 20% |
-| Email delivery / click-through | Whether notifications arrive and are used | ≥ 98% / ≥ 35% |
-| Stated-ETA accuracy | Whether the waitlist is honest | ≥ 85% delivered inside the stated window |
-| Cost & revenue per private request | Whether paid work is sustainable | Margin positive from the third request |
+| Request → lesson fulfilment | ≥70% in 14 days | Studio: funnel |
+| Helpfulness ("did this solve it?") | ≥80% | Studio: helpfulness % |
+| 7-day return | ≥20% | Studio: returning learners |
+| Median days to delivery | <7 | Studio: median days |
+| Search success | ≥70% of searches return something | Studio: top searches, demand gaps |
+| Payment success rate | ≥95% of started checkouts | `/admin/payments` |
+| Refund rate | <5% | `/admin/payments` |
+| Private access revoked on refund | 100% | Smoke invariant |
+| Duplicate requests avoided | count of votes on existing | Request detail |
 
 ---
 
 ## 10. Six-week sequence
 
-| Week | Focus | Exit criterion |
+| Week | Focus | Ships |
 | --- | --- | --- |
-| **0 (now)** | This build + 8–15 interviews + 5 manual requests handled inside the app | Go/no-go; verbatim language for the landing page |
-| **1** | Postgres + Prisma port (B1–B3), RLS + test suite (B4–B5) | Gate G1 passes in CI |
-| **2** | Real auth (B6–B7), uploads (B8–B9), CI (B11) | A stranger can sign up, upload, and get an RLS-safe request |
-| **3** | Email provider + templates + idempotency + bounce logging (C1–C5) | End-to-end test: reply → delivered → bell → click |
-| **4** | Analytics, error monitoring, rate limiting, a11y + perf pass (E1–E3, E6–E7) | Dashboard live; Lighthouse ≥ 95; zero critical a11y findings |
-| **5** | Private beta with 20 learners (F1–F2, F4), creator reuse tools (D1–D4) | 10 requests, 5 lessons, 3 interviews, first testimonial |
-| **6** | Public launch (F3, F5), measure and iterate; begin G-gate preparation | Launch checklist signed; weekly review scheduled |
-
-Monetisation does not begin in week 6. It begins when G2 passes.
+| 0 (done) | The loop | Built app A1–A14, D1–D7, G1/G3/G4/G6/G9 |
+| 1 | Interviews + real requests | 8 interviews, 5 real requests, 9 real lessons replacing placeholders |
+| 2 | Payments keys + legal | Stripe/Paystack test keys, webhook on a public URL, lawyer review (G3) |
+| 3 | Email provider | Resend domain, SPF/DKIM/DMARC, delivery webhook (C1/C4) |
+| 4 | Postgres + RLS suite | B1–B5 complete; smoke green on the new driver |
+| 5 | Private beta | 20 learners, 5 lessons, 3 interviews (F1) |
+| 6 | Decide on charging | Read G2 numbers; turn `payments_mode=live` only if green |
 
 ---
 
 ## 11. Open decisions
 
-The source document lists five questions that must be answered before the paid flow can be specified. Recommended answers below; each can be overturned cheaply **now** and expensively later.
-
-| # | Question | Recommendation | Consequence if changed |
-| --- | --- | --- | --- |
-| 1 | Is "private" a bespoke video or video + coaching? | **Bespoke video only.** Coaching destroys filming throughput and turns the product into consulting. | Coaching adds calendar tooling, scheduling and a second support model. |
-| 2 | Fixed price tiers or per-request quoting? | **Fixed tiers** for v1. Quoting adds a state machine and a support burden before demand is proven. | Quoting needs a quote object, expiry, and acceptance flow. |
-| 3 | May private work be re-filmed publicly later? | **Yes — technique only, never user data**, stated in the terms. | Saying no reduces long-term library value. |
-| 4 | Launch country and currency? | **Nigeria, NGN**, Paystack primary for local cards/transfers, Stripe for diaspora card payments. Verify settlement and FX before publishing prices. | A US-first launch inverts the provider choice and the refund-law rules. |
-| 5 | Prohibited categories? | **Medical, legal, financial advice, hacking, adult content, academic dishonesty** — published now at `/legal/not-covered`. | A narrower list raises liability; a wider one frustrates legitimate requests. |
+1. **Who owns the naira price?** Priority at ₦4,000 and private from ₦25,000 are assumptions from the PDF. They need a margin test (filming hours × hourly target + revisions).
+2. **Revision policy.** One revision is generous for ₦25,000. Keep, or price a second revision?
+3. **SMS/WhatsApp.** Worth per-message cost only if email deliverability proves poor in Nigeria.
+4. **Public lesson reuse.** If a public lesson answers a private request, may the creator charge for it? Current answer: no — reuse is free and the private fee buys *bespoke work*.
+5. **Community creators.** Phase H assumes revenue share; the trust and review model is unwritten.
 
 ---
 
 ## 12. Appendices
 
-### A. Notification matrix
+### A. Prohibited list (published at `/legal/not-covered`)
 
-See §4.6.
+Medical advice · legal advice · investment advice · hacking or credential theft · academic work-for-hire · adult content · anything requiring a third party's data without consent.
 
 ### B. SEO plan
 
-- Every public fulfilled request becomes `/tutorials/[slug]`, statically revalidated, with `VideoObject` + `LearningResource` JSON-LD, canonical URL, OG tags, and the learner's question as the H1 context.
-- `sitemap.xml` includes public lessons only; `robots.txt` disallows `/admin`, `/dashboard`, `/api`, `/requests`, `/login`.
-- Private requests are never rendered publicly, never linked, never in the sitemap, and carry owner-only access.
-- Next: per-lesson OG images, breadcrumb schema, internal linking from lessons to related topics, Search Console verification, and a "was this answered?" satisfaction signal in the SERP-facing copy.
+Public lessons are the acquisition surface: `VideoObject` JSON-LD, canonical slugs from the request title, `sitemap.xml` listing public lessons only, `robots.txt` excluding `/admin`, `/dashboard`, `/account`, `/checkout`, `/watch`, plus `noindex` on all private surfaces.
 
-### C. Prohibited list (published)
+### C. Manual QA script (~6 minutes)
 
-Medical advice · legal advice · financial advice · hacking/credential theft · adult content · academic dishonesty · anything that facilitates harm. Each decline carries a reason and a suggested narrower alternative.
+1. Search "sql" on `/` → lesson appears.
+2. Submit a request as a new user (magic link flow) → lands on the request page with a received confirmation.
+3. Submit 5 requests → the 6th over capacity is waitlisted with an honest banner.
+4. File a request containing "hack into" → appears in `/admin/moderation` flagged.
+5. As creator: schedule it, then decline one with a reason → learner sees the reason.
+6. Publish a lesson → requester + upvoters each get one bell entry and one outbox row.
+7. `/admin/library` → send an existing lesson to a new request → fulfilled, reuse count +1.
+8. Start a private checkout → pay → entitlement granted → open the signed player.
+9. Edit `exp` in the URL → refused. Sign out → 404.
+10. Refund from `/admin/payments` → access revoked, both notified.
+11. `/admin/outbox` → simulate a bounce → address suppressed.
+12. `/account` → download data → delete account → sign out clean.
 
-### D. Manual QA script (runs in ~6 minutes)
+### D. Launch checklist
 
-1. Signed out: board and lesson pages render; vote prompts sign-in and preserves intent.
-2. Sign in → wizard → draft survives a refresh → validation blocks a 3-word title → submit → success panel.
-3. Status timeline matches the admin status at every step.
-4. Duplicate check finds an existing request and "me too" increments the counter exactly once.
-5. Creator: publish with a bad URL → clear error; publish with a good URL → learner bell + outbox row within one refresh.
-6. Private request 404s signed out and for another learner; 200 for the owner and the creator.
-7. Declined request shows the reason and the not-covered link.
-8. Feedback appears in the admin score.
-9. Keyboard-only pass on the wizard and the queue.
-10. Mobile 375 px: bottom tab bar, sticky actions, no horizontal scroll.
+- [ ] G1 RLS suite green on Postgres
+- [ ] G2 free-loop metrics green
+- [ ] G3 lawyer-reviewed terms + signed playback
+- [ ] Email domain authenticated; delivery webhook live
+- [ ] Error monitoring + uptime alerts
+- [ ] Backups + tested restore
+- [ ] Runbook rehearsed once (refund, takedown, leak, outage)
+- [ ] 8 real lessons in the library
+- [ ] Analytics dashboards reviewed weekly
+- [ ] Support inbox with a 24-hour promise
 
-### E. Launch checklist (the 10-point gate from Document A)
+### E. Environment variables
 
-1. Learner can register, verify and sign in — including recovery.
-2. Learner can submit a useful request; validation and ownership are correct.
-3. Platform suggests existing answers before a duplicate is filed.
-4. Public lessons appear; private content never appears in public results.
-5. Creator can review and process a request; status changes are recorded.
-6. Creator can attach a lesson; the link is valid and the access claim is accurate.
-7. Learner is notified; the link opens the correct request.
-8. Learner can watch and give feedback; feedback is stored against the right request.
-9. Security boundaries verified — another learner cannot read or modify the request, reply or files.
-10. Failures are detectable: email failure, application error and restore-from-backup have all been tested.
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `SITE_URL` | Absolute links in email, sitemap, callbacks | `http://localhost:3000` |
+| `DATABASE_FILE` | SQLite path | `data/iwannalearn.db` |
+| `PAYMENT_PROVIDER` | `mock` · `paystack` · `stripe` | `mock` |
+| `PAYSTACK_SECRET_KEY` / `PAYSTACK_WEBHOOK_SECRET` | NGN rails + webhook verification | — |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | International cards + webhook | — |
+| `STREAM_SIGNING_SECRET` | Private playback token signing | dev fallback |
+| `CRON_SECRET` | Guards `/api/cron/digest` | — |
+| `DEMO_MODE` | Shows one-tap demo accounts | `true` |
 
-### F. File map
+### F. API surface
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/search` | GET | Library + open-request search, logs the query |
+| `/api/payments/webhook` | POST | Provider callback: verify, amount-check, idempotent settle |
+| `/api/cron/digest` | POST | Weekly digest (bearer `CRON_SECRET`), idempotent per week |
+| `/auth/verify` | GET | Exchanges a single-use login token for a session |
+
+### G. File map
 
 ```
 app/
-  page.tsx                     landing + instant search
-  explore/                     board + library with URL state
-  requests/new/                wizard shell
-  requests/[slug]/             request detail, timeline, lesson, feedback
-  tutorials/[slug]/            public lesson page + JSON-LD
-  dashboard/                   "my learning"
-  admin/                       creator cockpit
-  admin/outbox/                notification capture
-  login/  how-it-works/  legal/[page]/
-  api/search/                  instant-search JSON
-  sitemap.ts  robots.ts  not-found.tsx
-components/
-  request-wizard  hero-search  lesson-player  status-timeline
-  request-card  lesson-card  upvote-button  feedback-prompt
-  admin/{queue-board,reply-form,status-control,capacity-form}
-  ui/{button,badge,field,modal,toast,empty-state}
+  page.tsx  explore/  requests/{new,[slug]}/  tutorials/[slug]/  watch/[requestId]/
+  dashboard/  account/  pricing/  checkout/[reference]/  contact/  login/{,check}/  auth/verify/
+  admin/{,moderation,library,payments,analytics,outbox,support,settings}/  api/{search,payments/webhook,cron/digest}/
+  how-it-works/  legal/[page]/  sitemap.ts  robots.ts  not-found.tsx  error.tsx
+components/    ui/ (button, badge, field, modal, toast, empty-state)
+  request-wizard · lesson-player · private-player · payment-panel · delivery-actions
+  admin/ (queue-board, reply-form, status-control, capacity-form, moderation-decision,
+          reuse-form, payment-controls, settings-form, email-actions, admin-nav)
+  account/ (profile-form, danger-zone)
 lib/
-  db.ts        schema, seed, connection
-  queries.ts   all reads (the only place SQL SELECTs live)
-  actions.ts   all writes, auth checks, revalidation
-  auth.ts      sessions and roles
-  status.ts    the single vocabulary
-  parse.ts     slugs, YouTube parsing
+  schema.ts  db.ts  queries.ts  service.ts  actions.ts  types.ts  status.ts  parse.ts
+  auth.ts  notify.ts  email.ts  payments.ts  providers.ts  pricing.ts  signed-url.ts
+  digest.ts  analytics-client.ts  cn.ts  category-theme.ts
+scripts/  reset-db.mjs  smoke.mjs
 ```
 
 ---
 
-## 13. What I would do first, if only one thing
+## 13. If you only do one thing next
 
-Run eight interviews and file five real requests through this build by hand. The riskiest assumption in both documents is untested: that people will describe a specific stuck moment and wait for a video, rather than searching YouTube for twenty minutes and giving up quietly. Everything in §6 is cheaper to build after that question is answered — and nothing in §6 matters if it isn't.
+**Run eight interviews and file five real requests into the app you now have.**
 
-The product's promise should stay exactly as written on the landing page:
-
-> **Tell us what you want to learn. We'll help you find it — or make it.**
+Everything above is ready for that: the wizard takes 30 seconds, the studio tells you what to film, publishing notifies everyone, and the private path is verifiable end to end. What the build cannot tell you is whether the thing people are stuck on is what you think it is — and that answer changes the roadmap more than any remaining ticket.

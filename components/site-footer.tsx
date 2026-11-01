@@ -14,6 +14,7 @@ const columns = [
     title: "How it works",
     links: [
       { href: "/how-it-works", label: "The 4-step loop" },
+      { href: "/pricing", label: "Pricing" },
       { href: "/how-it-works#private", label: "Private lessons" },
       { href: "/how-it-works#faq", label: "Questions" },
     ],
@@ -24,6 +25,7 @@ const columns = [
       { href: "/legal/privacy", label: "Privacy" },
       { href: "/legal/terms", label: "Terms" },
       { href: "/legal/not-covered", label: "What we don't cover" },
+      { href: "/contact", label: "Contact us" },
     ],
   },
 ];

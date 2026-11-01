@@ -245,3 +245,47 @@ export const Book = (p: IconProps) => (
     <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" />
   </Icon>
 );
+
+export const Shield = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3.5 19 6v6c0 4.2-2.9 7.4-7 8.5-4.1-1.1-7-4.3-7-8.5V6l7-2.5Z" />
+    <path d="m9 12 2.2 2.2L15.5 10" />
+  </Icon>
+);
+
+export const Receipt = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17Z" />
+    <path d="M9 8.5h6M9 12.5h6M9 16h3" />
+  </Icon>
+);
+
+export const Chart = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 20V4" />
+    <path d="M4 20h16" />
+    <path d="M8 16v-5M12.5 16V7M17 16v-8" />
+  </Icon>
+);
+
+export const Refresh = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M20 11a8 8 0 1 0-2.5 6" />
+    <path d="M20 5v6h-6" />
+  </Icon>
+);
+
+export const Download = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 4v10" />
+    <path d="m8 11 4 4 4-4" />
+    <path d="M4 19h16" />
+  </Icon>
+);
+
+export const Alert = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 4 3 20h18L12 4Z" />
+    <path d="M12 10v4.5M12 17.5v.3" />
+  </Icon>
+);

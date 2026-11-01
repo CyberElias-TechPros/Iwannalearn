@@ -71,8 +71,10 @@ const DOCS: Record<string, Doc> = {
       {
         heading: "Refunds and revisions",
         body: [
-          "Private lessons include one revision within seven days of delivery. A second revision, or a change of scope, is a new request.",
-          "If we fail to deliver the agreed scope, you get a full refund. If the lesson matches the agreed scope, custom digital work is generally non-refundable — that's why the scope is agreed in writing first.",
+          "Private lessons include one revision within seven days of delivery. A second revision, or a change of scope, is a new request. Ask from the request page; the window closes when you confirm delivery.",
+          "If we fail to deliver the agreed scope, you get a full refund — processed to the original payment method, and access to the private recording is closed at the same time.",
+          "If the lesson matches the agreed scope, custom digital work is generally non-refundable. That isn't a trick: it's why the scope is shown to you, in writing, before you pay, and why nothing is charged until you press pay.",
+          "Declined requests are never charged. If a request is declined after payment (for example, we discover the scope needs a licence we don't hold), you get a full refund without asking.",
         ],
       },
       {
@@ -85,7 +87,10 @@ const DOCS: Record<string, Doc> = {
       {
         heading: "Payments",
         body: [
-          "Payments are not enabled in this build. When they are, they'll run through a verified provider for our operating country, with prices shown in the currency you'll be charged, taxes included where required.",
+          "Prices are shown in naira and include 7.5% VAT where applicable; the invoice breaks out the tax portion. Local cards, bank transfer and USSD are handled by Paystack; international cards by Stripe.",
+          "A payment is only ever marked as paid after the provider confirms it server-to-server. A redirect back to our site, on its own, never releases a lesson.",
+          "Private lessons are delivered through signed, expiring playback links tied to your account. They aren't unlisted YouTube links, and forwarding a link does not give anyone else access.",
+          "In this demonstration build, checkout runs in test mode: no money moves, but the full path — pending, verified, receipt, entitlement, refund — is exercised.",
         ],
       },
       {

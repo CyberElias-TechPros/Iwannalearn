@@ -11,7 +11,7 @@ export function MobileTabBar({ signedIn }: { signedIn: boolean }) {
   const items = [
     { href: "/", label: "Home", icon: Home, match: "/" },
     { href: "/explore", label: "Explore", icon: Compass, match: "/explore" },
-    { href: "/dashboard", label: "Learning", icon: Book, match: signedIn ? "/dashboard" : "/login" },
+    { href: signedIn ? "/dashboard" : "/login", label: "Learning", icon: Book, match: "/dashboard" },
   ];
 
   return (

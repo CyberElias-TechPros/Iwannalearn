@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/lib/actions";
-import { Book, LogOut, Settings } from "@/components/icons";
+import { Book, LogOut, Settings, User } from "@/components/icons";
 import type { SessionUser } from "@/lib/types";
 
 function initials(name: string | null, email: string) {
@@ -59,6 +59,14 @@ export function UserMenu({ user }: { user: SessionUser }) {
             className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] text-ink-2 hover:bg-paper-2"
           >
             <Book size={16} /> My learning
+          </Link>
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            role="menuitem"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] text-ink-2 hover:bg-paper-2"
+          >
+            <User size={16} /> Account & notifications
           </Link>
           {user.role === "creator" && (
             <Link

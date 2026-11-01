@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchEverything } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { logSearch } from "@/lib/service";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export async function GET(request: Request) {
   const q = (url.searchParams.get("q") ?? "").slice(0, 120).trim();
   const user = await getCurrentUser();
   const result = searchEverything(q, user?.id);
+  // Search terms are the cheapest demand signal we have — log the misses too.
+  logSearch(q, result.lessons.length + result.requests.length, user?.id);
 
   return NextResponse.json(
     {
