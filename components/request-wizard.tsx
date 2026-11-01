@@ -86,6 +86,7 @@ export function RequestWizard({
   const { push } = useToast();
   const router = useRouter();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const submittedRef = useRef(false);
   const [restored, setRestored] = useState(false);
 
   /* Restore a half-written draft so nobody loses their words on a refresh. */
@@ -103,6 +104,19 @@ export function RequestWizard({
       /* ignore */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Clear the saved draft only once a submission has actually landed.
+  useEffect(() => {
+    return () => {
+      if (submittedRef.current) {
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -143,9 +157,11 @@ export function RequestWizard({
     const formData = new FormData();
     Object.entries(values).forEach(([key, value]) => formData.append(key, value));
 
+    submittedRef.current = true;
     startTransition(async () => {
       const result: ActionState = await submitRequestAction(formData);
       if (result?.error) {
+        submittedRef.current = false;
         setFormError(result.error);
         setFieldErrors(result.fieldErrors ?? {});
         const errors = result.fieldErrors ?? {};
