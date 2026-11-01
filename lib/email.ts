@@ -7,6 +7,7 @@
  */
 
 export type EmailTemplate =
+  | "login_link"
   | "request_received"
   | "lesson_ready"
   | "status_update"
@@ -19,7 +20,10 @@ export type EmailTemplate =
   | "creator_digest"
   | "support_ack";
 
-type Data = Record<string, string | number | boolean | null | undefined>;
+type Data = Record<string, string | number | boolean | null | undefined> & {
+  /** Injected by the delivery layer so every email carries a working opt-out. */
+  unsubscribeUrl?: string;
+};
 
 const SITE = () => process.env.SITE_URL ?? "http://localhost:3000";
 
@@ -43,7 +47,13 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function wrap(heading: string, paragraphs: string[], cta?: { label: string; href: string }, footnote?: string) {
+function shell(
+  heading: string,
+  paragraphs: string[],
+  cta?: { label: string; href: string },
+  footnote?: string,
+  unsubscribeUrl?: string,
+) {
   const body = paragraphs
     .map(
       (paragraph) =>
@@ -70,7 +80,10 @@ function wrap(heading: string, paragraphs: string[], cta?: { label: string; href
     <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #e7dfd0;font-size:12.5px;color:#6e7f75">${escapeHtml(SIGN_OFF)}</p>
   </div>
   <p style="max-width:560px;margin:14px auto 0;text-align:center;font-size:11.5px;color:#6e7f75">
-    You're getting this because you asked for a lesson. <a href="${link("/dashboard")}" style="color:#6e7f75">Manage your notifications</a>.
+    You're getting this because you asked for a lesson.
+    <a href="${link("/account")}" style="color:#6e7f75;text-decoration:underline">Manage preferences</a>
+    &nbsp;·&nbsp;
+    <a href="${String(unsubscribeUrl ?? link("/account"))}" style="color:#6e7f75;text-decoration:underline">Unsubscribe from lesson emails</a>
   </p>
 </body></html>`;
 }
@@ -78,8 +91,42 @@ function wrap(heading: string, paragraphs: string[], cta?: { label: string; href
 export function renderEmail(template: EmailTemplate, data: Data): RenderedEmail {
   const name = String(data.name ?? "there");
   const title = String(data.title ?? "your request");
+  const unsub = data.unsubscribeUrl;
+  /** Local alias so every template gets the same footer without repeating an argument. */
+  const w = (
+    heading: string,
+    paragraphs: string[],
+    cta?: { label: string; href: string },
+    footnote?: string,
+  ) => shell(heading, paragraphs, cta, footnote, unsub);
 
   switch (template) {
+    case "login_link": {
+      const url = String(data.url ?? link("/dashboard"));
+      return {
+        subject: "Your sign-in link",
+        text: `Hi ${name},
+
+Here's your one-time sign-in link:
+
+${url}
+
+It works once and expires in 30 minutes. If you didn't ask for it, ignore this email — nobody can sign in without clicking it.
+
+${SIGN_OFF}`,
+        html: w(
+          "Here's your sign-in link.",
+          [
+            `Hi ${name},`,
+            "Click below and you're in. The link works once and expires in 30 minutes.",
+            "If you didn't ask for this, ignore it — nobody can sign in without opening the link.",
+          ],
+          { label: "Sign in to iwannalearn", href: url },
+          "Single use. Time limited. That's the whole password policy.",
+        ),
+      };
+    }
+
     case "request_received": {
       const path = String(data.path ?? "/dashboard");
       return {
@@ -98,7 +145,7 @@ What happens next:
 Track it any time: ${link(path)}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           "Your request is in.",
           [
             `Hi ${name},`,
@@ -128,7 +175,7 @@ Watch it here: ${link(path)}
 ${String(data.note ?? "")}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           isPrivate ? "Your private lesson is ready." : "Your lesson is ready.",
           [
             `Hi ${name},`,
@@ -158,7 +205,7 @@ ${String(data.blurb ?? "")}
 See the request: ${link(path)}
 
 ${SIGN_OFF}`,
-        html: wrap("A small update on your request.", [`Hi ${name},`, `“${title}” has moved to: ${statusLabel}.`, String(data.blurb ?? "")], {
+        html: w("A small update on your request.", [`Hi ${name},`, `“${title}” has moved to: ${statusLabel}.`, String(data.blurb ?? "")], {
           label: "Open your request",
           href: link(path),
         }),
@@ -179,7 +226,7 @@ It keeps its place and moves up automatically when a slot opens — you don't ne
 Your request: ${link(path)}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           "An honest wait, not a silent one.",
           [
             `Hi ${name},`,
@@ -204,7 +251,7 @@ We'll notify you the moment it's live.
 ${link(path)}
 
 ${SIGN_OFF}`,
-        html: wrap("A slot opened.", [`Hi ${name},`, `“${title}” is off the waitlist and scheduled for filming.`], {
+        html: w("A slot opened.", [`Hi ${name},`, `“${title}” is off the waitlist and scheduled for filming.`], {
           label: "See the request",
           href: link(path),
         }),
@@ -226,7 +273,7 @@ If that's a surprise, reply to this email and we'll talk it through.
 What we don't cover: ${link("/legal/not-covered")}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           "We're not making this one.",
           [
             `Hi ${name},`,
@@ -256,7 +303,7 @@ What happens now: we scope it, film it, and tell you the moment it's ready.
 ${link(path)}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           "Payment received.",
           [
             `Hi ${name},`,
@@ -279,7 +326,7 @@ We've got your revision note and we'll take another pass.
 What you asked for: ${String(data.note ?? "")}
 
 ${SIGN_OFF}`,
-        html: wrap("Revision noted.", [`Hi ${name},`, "We've got your notes and we'll re-record the parts that missed.", String(data.note ?? "")]),
+        html: w("Revision noted.", [`Hi ${name},`, "We've got your notes and we'll re-record the parts that missed.", String(data.note ?? "")]),
       };
 
     case "delivery_confirmed":
@@ -290,7 +337,7 @@ ${SIGN_OFF}`,
 If anything changes, reply to this email and we'll pick it back up.
 
 ${SIGN_OFF}`,
-        html: wrap("Closed, and thanks.", [`Thanks ${name},`, "Marked as delivered and closed. If anything changes, reply and we'll pick it up."]),
+        html: w("Closed, and thanks.", [`Thanks ${name},`, "Marked as delivered and closed. If anything changes, reply and we'll pick it up."]),
       };
 
     case "creator_digest":
@@ -307,7 +354,7 @@ Median days to delivery: ${String(data.medianDays ?? "—")}
 Open the studio: ${link("/admin")}
 
 ${SIGN_OFF}`,
-        html: wrap(
+        html: w(
           "Your week in the studio.",
           [
             `${String(data.newRequests ?? 0)} new requests this week.`,
@@ -329,7 +376,7 @@ Thanks for writing in. We're one person, so give us a working day to reply prope
 Your message: ${String(data.body ?? "")}
 
 ${SIGN_OFF}`,
-        html: wrap("Thanks for writing in.", [
+        html: w("Thanks for writing in.", [
           `Hi ${name},`,
           "We're one person, so give us a working day to reply properly.",
           String(data.body ?? ""),

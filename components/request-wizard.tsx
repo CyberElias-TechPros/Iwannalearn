@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { submitRequestAction, toggleUpvoteAction, type ActionState } from "@/lib/actions";
+import { UploadField, type StagedFile } from "@/components/upload-field";
 import { CATEGORIES, LEVELS, TIERS, levelLabel, tierMeta } from "@/lib/status";
 import { Field, Input, Textarea, ValidNote } from "@/components/ui/field";
 import { buttonClass } from "@/components/ui/button";
@@ -84,6 +85,7 @@ export function RequestWizard({
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [files, setFiles] = useState<StagedFile[]>([]);
   const [pending, startTransition] = useTransition();
   const { push } = useToast();
   const router = useRouter();
@@ -483,6 +485,10 @@ export function RequestWizard({
                     invalid={Boolean(fieldErrors.contextLink)}
                   />
                 </Field>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-line bg-paper-2/30 p-4">
+                <UploadField files={files} onChange={setFiles} />
               </div>
 
               <div className="mt-6 rounded-xl border border-line bg-paper-2/50 p-4">

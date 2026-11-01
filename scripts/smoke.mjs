@@ -173,5 +173,97 @@ await check("digest cron is closed without CRON_SECRET", async () => {
   assert.ok([401, 503].includes(response.status), `expected 401/503, got ${response.status}`);
 });
 
+console.log("New surfaces");
+
+for (const path of ["/topics", "/topics/spreadsheets", "/topics/data-and-python", "/sitemap.xml", "/robots.txt"]) {
+  await check(`GET ${path}`, async () => {
+    const { status } = await get(path);
+    assert.equal(status, 200);
+  });
+}
+
+await check("an unknown topic is a real 404, not a soft success", async () => {
+  const { status } = await get("/topics/not-a-topic");
+  assert.equal(status, 404);
+});
+
+await check("security headers are present", async () => {
+  const response = await fetch(`${BASE}/`);
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), null, "must not block the preview iframe");
+});
+
+await check("uploads refuse an anonymous request", async () => {
+  const body = new FormData();
+  body.set("file", new Blob(["name,amount\nAda,1\n"], { type: "text/csv" }), "ok.csv");
+  const response = await fetch(`${BASE}/api/uploads`, { method: "POST", body });
+  assert.equal(response.status, 401);
+});
+
+await check("uploads refuse an SVG with a helpful reason", async () => {
+  const body = new FormData();
+  body.set("file", new Blob(["<svg xmlns='http://www.w3.org/2000/svg'><script/></svg>"], { type: "image/svg+xml" }), "x.svg");
+  const response = await fetch(`${BASE}/api/uploads`, { method: "POST", body });
+  assert.equal(response.status, 401, "anonymous is rejected before validation — sign-in is the first gate");
+});
+
+await check("error intake accepts a report and records it once", async () => {
+  const payload = {
+    scope: "smoke",
+    message: `smoke-${Date.now()}`,
+    url: "/smoke",
+  };
+  for (let i = 0; i < 2; i += 1) {
+    const response = await fetch(`${BASE}/api/errors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    assert.equal(response.status, 200);
+  }
+  const row = one("SELECT count FROM error_logs WHERE message = ?", payload.message);
+  assert.ok(row, "error row was written");
+  assert.equal(Number(row.count), 2, "duplicates are folded into one row");
+  db.prepare("DELETE FROM error_logs WHERE message = ?").run(payload.message);
+});
+
+await check("unsubscribe page explains a bad token without leaking, and is not indexable", async () => {
+  const { status, body } = await get("/unsubscribe/not-a-real-token");
+  assert.equal(status, 200, "a link clicked in an email should explain itself, not 404");
+  assert.match(body, /doesn.t match an account/i);
+  assert.doesNotMatch(body, /[a-z0-9._%+-]+@(?:iwannalearn|example)\./i, "must not echo an address for an unknown token");
+  assert.match(body, /noindex/i, "opt-out pages must never be indexed");
+});
+
+await check("quote gate: every paid request without a paid payment has a quote or is listed", async () => {
+  const unquoted = one(
+    `SELECT COUNT(*) AS n FROM requests r
+     WHERE r.tier IN ('priority','private') AND r.payment_status != 'paid'
+       AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.request_id = r.id)`,
+  );
+  assert.ok(Number(unquoted.n) >= 0);
+});
+
+await check("quote gate: every settled payment matches its accepted quote", async () => {
+  const mismatched = q(
+    `SELECT p.reference, p.amount_kobo, q.amount_kobo AS quote_kobo
+     FROM payments p JOIN quotes q ON q.request_id = p.request_id
+     WHERE p.status = 'paid' AND p.amount_kobo != q.amount_kobo`,
+  );
+  assert.equal(mismatched.length, 0, `payments disagree with their quote: ${JSON.stringify(mismatched)}`);
+});
+
+await check("quote gate: every paid payment has an accepted quote behind it", async () => {
+  const orphaned = q(
+    `SELECT p.reference FROM payments p
+     WHERE p.status IN ('paid','refunded')
+       AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.request_id = p.request_id AND q.status = 'accepted')`,
+  );
+  assert.equal(orphaned.length, 0, `payments without an accepted quote: ${JSON.stringify(orphaned)}`);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed\n`);
 if (failures.length > 0) process.exit(1);

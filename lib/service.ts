@@ -474,6 +474,14 @@ export function logSearch(term: string, results: number, userId?: string | null)
   }
 }
 
+/** Drops limiter rows whose window closed, so the table can't grow forever. */
+export function purgeExpiredRateLimits(maxAgeMs = 24 * 60 * 60 * 1000): number {
+  const result = getDb()
+    .prepare("DELETE FROM rate_limits WHERE window_start < ?")
+    .run(Date.now() - maxAgeMs);
+  return Number(result.changes);
+}
+
 /** Fixed-window limiter. Good enough for one creator and a few hundred learners. */
 export function rateLimit(key: string, limit: number, windowMs: number): { allowed: boolean; remaining: number; retryAfterSeconds: number } {
   const db = getDb();

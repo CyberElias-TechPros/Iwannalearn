@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { listRequestRefs } from "@/lib/queries";
+import { listTopics } from "@/lib/topics";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.SITE_URL ?? "http://localhost:3000";
@@ -7,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${base}/topics`, changeFrequency: "weekly", priority: 0.85 },
     { url: `${base}/explore`, changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/explore?tab=requests`, changeFrequency: "daily", priority: 0.7 },
     { url: `${base}/how-it-works`, changeFrequency: "monthly", priority: 0.6 },
@@ -25,5 +27,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...staticRoutes, ...lessonRoutes];
+  const topicRoutes: MetadataRoute.Sitemap = listTopics().map((topic) => ({
+    url: `${base}/topics/${topic.slug}`,
+    changeFrequency: "weekly",
+    priority: 0.75,
+  }));
+
+  return [...staticRoutes, ...topicRoutes, ...lessonRoutes];
 }

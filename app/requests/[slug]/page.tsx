@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
 import { getRequestBySlug, getRequestExtras, getViewerFeedback, hasEntitlement, similarRequests } from "@/lib/queries";
-import { summaryForRequest } from "@/lib/payments";
+import { summaryForRequest, refundRequestFor } from "@/lib/payments";
 import { paymentsEnabled, type PaidTier } from "@/lib/pricing";
 import { PaymentPanel } from "@/components/payment-panel";
 import { DeliveryActions } from "@/components/delivery-actions";
@@ -18,9 +18,14 @@ import { FeedbackPrompt } from "@/components/feedback-prompt";
 import { RequestCard } from "@/components/request-card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { Alert, ArrowRight, Bell, Calendar, Check, Clock, Globe, Link as LinkIcon, Lock, Plus, Receipt, Sparkle } from "@/components/icons";
+import { Alert, ArrowRight, Bell, Calendar, Check, Clock, File, Globe, Link as LinkIcon, Lock, Plus, Receipt, Sparkle } from "@/components/icons";
 import { levelLabel, plural, relativeTime, statusMeta, tierMeta } from "@/lib/status";
 import { getSetting } from "@/lib/service";
+import { listUploads, humanSize } from "@/lib/uploads";
+import { getQuote, quoteBreakdown } from "@/lib/quotes";
+import { formatNaira } from "@/lib/pricing";
+import { QuoteCard } from "@/components/quote-card";
+import { RefundRequest } from "@/components/refund-request";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -56,6 +61,10 @@ export default async function RequestPage({
   const justPaid = query.paid === "1";
   const paidTier: PaidTier | null = request.tier === "private" || request.tier === "priority" ? request.tier : null;
   const payment = paidTier ? summaryForRequest(request.id) : null;
+  const attachments = isOwner || isCreator ? listUploads(request.id) : [];
+  const quote = paidTier && (isOwner || isCreator) ? getQuote(request.id) : null;
+  const refundClaim = paidTier && isOwner && payment?.status === "paid" ? refundRequestFor(request.id) : null;
+  const breakdown = quote ? quoteBreakdown(Number(quote.amount_kobo)) : null;
   const entitled = hasEntitlement(user?.id, request.id);
   const paymentsOn = paymentsEnabled();
   const revisionWindow = Number(getSetting("refund_window_days", "7"));
@@ -240,6 +249,33 @@ export default async function RequestPage({
             </dl>
           </section>
 
+          {attachments.length > 0 && (
+            <section className="surface p-5" aria-labelledby="files-heading">
+              <h2 id="files-heading" className="flex items-center gap-1.5 text-[15px] font-semibold">
+                <File size={15} className="text-brand" /> Attached files
+              </h2>
+              <p className="mt-0.5 text-[12.5px] text-ink-3">
+                Only you and Elias can open these. They&apos;re shown in the lesson where they matter, and never published.
+              </p>
+              <ul className="mt-2.5 space-y-1.5">
+                {attachments.map((file) => (
+                  <li key={file.id}>
+                    <a
+                      href={`/api/uploads/${file.id}`}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper-2/40 px-3 py-2 transition hover:border-brand/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <File size={13} className="shrink-0 text-ink-3" />
+                        <span className="truncate text-[12.5px] font-medium">{file.filename}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] text-ink-3">{humanSize(Number(file.size))}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {paidTier && (isOwner || isCreator) && (
             <section className="surface p-5" aria-labelledby="payment-heading">
               <div className="flex items-center justify-between gap-2">
@@ -255,23 +291,48 @@ export default async function RequestPage({
                 )}
               </div>
 
+              {isOwner && quote && breakdown && (
+                <div className="mt-3">
+                  <QuoteCard
+                    requestId={request.id}
+                    quote={{
+                      amountLabel: formatNaira(Number(quote.amount_kobo)),
+                      taxLabel: breakdown.taxLabel,
+                      scope: quote.scope,
+                      deliverables: quote.deliverables,
+                      turnaroundDays: quote.turnaround_days,
+                      revisions: Number(quote.revisions),
+                      status: quote.status,
+                      declineNote: quote.decline_note,
+                    }}
+                  />
+                </div>
+              )}
+
               {isOwner ? (
                 <div className="mt-3">
                   <PaymentPanel
                     requestId={request.id}
                     tier={paidTier}
-                    amountLabel={payment?.label ?? tierMeta(request.tier).price}
+                    amountLabel={
+                      quote && quote.status !== "declined"
+                        ? formatNaira(Number(quote.amount_kobo))
+                        : payment?.label ?? tierMeta(request.tier).price
+                    }
                     paymentStatus={payment?.status ?? "none"}
                     enabled={paymentsOn}
                     reference={payment?.reference ?? null}
                     revisionState={request.revisionState}
+                    quoteStatus={quote?.status ?? "none"}
                   />
                 </div>
               ) : (
                 <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
                   {payment?.status === "paid"
                     ? `Paid ${payment.label} (including ${payment.taxLabel} tax). Scope is locked; new scope is a new request.`
-                    : "No payment settled yet. Don't start filming until it is — that's the scope-lock rule."}
+                    : quote?.status === "accepted"
+                      ? `Quote accepted at ${formatNaira(Number(quote.amount_kobo))}. Don't start filming until the payment clears — that's the scope-lock rule.`
+                      : "No quote accepted and nothing paid yet. Send a quote before any work starts."}
                 </p>
               )}
 
@@ -368,6 +429,18 @@ export default async function RequestPage({
                     Open the private player <ArrowRight size={13} />
                   </ButtonLink>
                 </div>
+              )}
+
+              {isOwner && paidTier && payment?.status === "paid" && (
+                <RefundRequest
+                  requestId={request.id}
+                  amountLabel={payment.label}
+                  existing={
+                    refundClaim
+                      ? { status: refundClaim.status, reason: refundClaim.reason, resolution: refundClaim.resolution }
+                      : null
+                  }
+                />
               )}
 
               {isOwner && paidTier && (

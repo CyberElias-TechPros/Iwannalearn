@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendWeeklyDigests } from "@/lib/digest";
-import { getSetting } from "@/lib/service";
-import { track } from "@/lib/service";
+import { getSetting, purgeExpiredRateLimits, track } from "@/lib/service";
+import { purgeOrphanUploads } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
+  // Housekeeping rides along with the weekly job rather than needing its own
+  // scheduler: staged-but-never-attached uploads are purged, and the rate-limit
+  // buckets from finished windows are dropped.
+  const purgedUploads = purgeOrphanUploads(24);
+  const purgedLimits = purgeExpiredRateLimits();
+
   const result = sendWeeklyDigests();
   track("digest_sent", { data: { ...result, day: getSetting("digest_day", "monday") } });
 
-  return NextResponse.json({ ok: true, ...result });
+  return NextResponse.json({ ok: true, ...result, purgedUploads, purgedLimits });
 }
 
 export async function GET() {

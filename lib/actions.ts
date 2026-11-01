@@ -23,6 +23,10 @@ import {
   anonymizeUser,
   publishLesson,
 } from "./service";
+import { attachUploads } from "./uploads";
+import { acceptQuote, declineQuote, proposeQuote } from "./quotes";
+import { clearErrors } from "./errors";
+import { requestRefund, resolveRefundRequest } from "./payments";
 import { notifyUser, queueEmail, deliver, markBounced, clearBounce } from "./notify";
 import { prepareCheckout, refund, settle } from "./payments";
 import { formatNaira, paymentsEnabled, PRICING, type PaidTier } from "./pricing";
@@ -91,11 +95,13 @@ export async function signInAction(prevOrData: ActionState | FormData, maybeData
   queueEmail({
     to: email,
     userId: user.id,
-    template: "support_ack",
+    template: "login_link",
     idempotencyKey: `login:${token}`,
+    // A sign-in link must never be suppressed: it is the only way in.
+    critical: true,
     data: {
       name: user.name ?? "there",
-      body: `Your sign-in link is ready: ${process.env.SITE_URL ?? "http://localhost:3000"}/auth/verify?token=${token} — it expires in 30 minutes and works once.`,
+      url: `${process.env.SITE_URL ?? "http://localhost:3000"}/auth/verify?token=${token}`,
     },
   });
   track("login_requested", { userId: user.id });
@@ -227,6 +233,14 @@ export async function submitRequestAction(formData: FormData): Promise<ActionSta
   const created = createRequest(user, parsed.data);
   const path = `/requests/${created.slug}`;
 
+  // Claim any files staged while filling the wizard. Silently zero if the
+  // learner attached none, which is the common case.
+  const uploadIds = String(formData.get("uploadIds") || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const attached = uploadIds.length > 0 ? attachUploads(created.id, user.id, uploadIds) : 0;
+
   track("request_submitted", { userId: user.id, requestId: created.id, data: { tier: parsed.data.tier } });
 
   notifyUser({
@@ -236,7 +250,7 @@ export async function submitRequestAction(formData: FormData): Promise<ActionSta
     title: "We've got your request ✅",
     body: created.waitlisted
       ? "It's on the waitlist — we're at this week's filming capacity. You'll hear when a slot opens."
-      : `“${truncate(parsed.data.title, 70)}” is in the queue. We'll notify you the moment there's news.`,
+      : `“${truncate(parsed.data.title, 70)}” is in the queue${attached ? ` with ${attached} file${attached === 1 ? "" : "s"}` : ""}. We'll notify you the moment there's news.`,
     href: path,
   });
 
@@ -758,6 +772,73 @@ export async function requestRevisionAction(formData: FormData): Promise<ActionS
 }
 
 /* ------------------------------------------------------------------ */
+/* Quotes — scope agreed before money                                   */
+/* ------------------------------------------------------------------ */
+
+export async function acceptQuoteAction(
+  requestId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  const result = acceptQuote({ requestId, userId: user.id });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/admin/quotes");
+  return { ok: true };
+}
+
+export async function declineQuoteAction(
+  requestId: string,
+  note: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  const result = declineQuote({ requestId, userId: user.id, note });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/admin/quotes");
+  return { ok: true };
+}
+
+/** Creator-side: propose or re-propose the scope and price. */
+export async function proposeQuoteAction(
+  prevOrData: ActionState | FormData,
+  maybeData?: FormData,
+): Promise<ActionState> {
+  const formData = resolveFormData(prevOrData, maybeData);
+  const user = await getCurrentUser();
+  if (!isCreator(user)) return fail("Only the creator can send quotes.");
+
+  const requestId = String(formData.get("requestId") || "");
+  const naira = Number(String(formData.get("amountNaira") || "").replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(naira) || naira <= 0) {
+    return { ok: false, error: "Enter the price in naira, for example 25000.", fieldErrors: { amountNaira: "Enter a price." } };
+  }
+
+  const result = proposeQuote({
+    requestId,
+    creatorId: user!.id,
+    amountKobo: Math.round(naira * 100),
+    scope: String(formData.get("scope") || ""),
+    deliverables: String(formData.get("deliverables") || "") || null,
+    turnaroundDays: Number(formData.get("turnaroundDays") || 0) || null,
+    revisions: Number(formData.get("revisions") || 1),
+  });
+
+  if (!result.ok) return fail(result.error);
+
+  revalidatePath("/admin/quotes");
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/dashboard");
+  return { ok: true, message: `Quote for ${(naira).toLocaleString("en-NG")} naira sent. Nothing is charged until they accept.` };
+}
+
+/* ------------------------------------------------------------------ */
 /* Payments                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -802,6 +883,53 @@ export async function refundPaymentAction(formData: FormData): Promise<ActionSta
   revalidatePath("/admin/payments");
   revalidatePath("/admin");
   return { ok: true, message: "Refunded. Access revoked and the learner has been told." };
+}
+
+export async function requestRefundAction(
+  requestId: string,
+  reason: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  const result = requestRefund({ userId: user.id, requestId, reason });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function resolveRefundAction(
+  prevOrData: ActionState | FormData,
+  maybeData?: FormData,
+): Promise<ActionState> {
+  const formData = resolveFormData(prevOrData, maybeData);
+  const user = await getCurrentUser();
+  if (!isCreator(user)) return fail("Only the creator can settle refunds.");
+
+  const result = resolveRefundRequest({
+    id: String(formData.get("id") || ""),
+    approve: String(formData.get("decision") || "") === "approve",
+    note: String(formData.get("note") || ""),
+  });
+  if (!result.ok) return fail(result.error ?? "Could not resolve that.");
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin");
+  return { ok: true, message: "Settled. The learner has been told, and access follows the decision." };
+}
+
+/* ------------------------------------------------------------------ */
+/* Operations                                                          */
+/* ------------------------------------------------------------------ */
+
+export async function clearErrorsAction(): Promise<ActionState> {
+  const user = await getCurrentUser();
+  if (!isCreator(user)) return fail("Not allowed.");
+  const removed = clearErrors();
+  revalidatePath("/admin/health");
+  return { ok: true, message: `Cleared ${removed} recorded error${removed === 1 ? "" : "s"}.` };
 }
 
 /* ------------------------------------------------------------------ */
@@ -849,6 +977,7 @@ export async function supportAction(prevOrData: ActionState | FormData, maybeDat
     userId: user?.id ?? null,
     template: "support_ack",
     idempotencyKey: `support:${Date.now()}`,
+    critical: true,
     data: { name: user?.name ?? "there", body: parsed.data.body },
   });
 

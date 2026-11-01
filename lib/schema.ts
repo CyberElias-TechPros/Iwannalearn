@@ -231,8 +231,65 @@ CREATE TABLE IF NOT EXISTS uploads (
   mime        TEXT NOT NULL,
   size        INTEGER NOT NULL,
   storage_key TEXT NOT NULL,
+  kind        TEXT NOT NULL DEFAULT 'brief',
+  note        TEXT,
   created_at  TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_uploads_request ON uploads(request_id);
+
+-- Scope agreement. The promise "scope is agreed in writing before you pay"
+-- is only true if there is an object to point at, so here it is.
+CREATE TABLE IF NOT EXISTS quotes (
+  id           TEXT PRIMARY KEY,
+  request_id   TEXT NOT NULL UNIQUE,
+  amount_kobo  INTEGER NOT NULL,
+  currency     TEXT NOT NULL DEFAULT 'NGN',
+  scope        TEXT NOT NULL,
+  deliverables TEXT,
+  turnaround_days INTEGER,
+  revisions    INTEGER NOT NULL DEFAULT 1,
+  status       TEXT NOT NULL DEFAULT 'proposed',
+  proposed_by  TEXT NOT NULL,
+  proposed_at  TEXT NOT NULL,
+  accepted_at  TEXT,
+  declined_at  TEXT,
+  decline_note TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+
+-- Learner-initiated refund / dispute requests, so fairness runs both ways.
+CREATE TABLE IF NOT EXISTS refund_requests (
+  id          TEXT PRIMARY KEY,
+  payment_id  TEXT NOT NULL,
+  request_id  TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  reason      TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'open',
+  resolution  TEXT,
+  created_at  TEXT NOT NULL,
+  resolved_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_refund_requests_status ON refund_requests(status);
+
+-- Server-side error trail. console.error dies with the container.
+CREATE TABLE IF NOT EXISTS error_logs (
+  id         TEXT PRIMARY KEY,
+  scope      TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  stack      TEXT,
+  url        TEXT,
+  user_id    TEXT,
+  digest     TEXT,
+  created_at TEXT NOT NULL,
+  count      INTEGER NOT NULL DEFAULT 1,
+  last_seen_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_error_logs_digest ON error_logs(digest);
 
 CREATE TABLE IF NOT EXISTS settings (
   key    TEXT PRIMARY KEY,
@@ -259,6 +316,15 @@ export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[]
   { table: "requests", column: "delivery_confirmed_at", ddl: "TEXT" },
   { table: "replies", column: "reused_from", ddl: "TEXT" },
   { table: "outbox", column: "html", ddl: "TEXT" },
+  { table: "users", column: "unsubscribe_token", ddl: "TEXT" },
+  { table: "users", column: "notify_email", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "users", column: "deleted_at", ddl: "TEXT" },
+  { table: "requests", column: "attachment_count", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "uploads", column: "kind", ddl: "TEXT NOT NULL DEFAULT 'brief'" },
+  { table: "uploads", column: "note", ddl: "TEXT" },
+  { table: "requests", column: "quote_id", ddl: "TEXT" },
+  { table: "error_logs", column: "count", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "error_logs", column: "last_seen_at", ddl: "TEXT NOT NULL DEFAULT ''" },
 ];
 
 export const DEFAULT_SETTINGS: Record<string, string> = {

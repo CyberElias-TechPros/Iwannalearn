@@ -19,7 +19,8 @@ The reconciled, granular plan — what is built, what is gated, what is next and
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm run smoke        # 27 end-to-end checks (second terminal)
+npm test             # 39 unit checks (quote gate, uploads, signed links, money)
+npm run smoke        # 41 end-to-end checks (second terminal)
 ```
 
 The database is created and seeded on first request. Reset it any time:
@@ -60,8 +61,10 @@ Nothing is required in the environment; everything has a safe default. Copy `.en
 **Learner**
 - Landing with instant search across the library and open requests, live stats, tier explanation
 - Explore with two tabs, search, topic and level filters — all URL-shareable
-- Four-step wizard: draft autosave, example-driven prompts, a vague-title nudge, live duplicate matching, tier preselection, review
-- Request detail: status timeline, brief, public or **private** player, payment panel, delivery confirmation, one included revision, withdraw, feedback, related requests, share
+- Four-step wizard: draft autosave, example-driven prompts, a vague-title nudge, live duplicate matching, tier preselection, **file attachments** (screenshots, spreadsheets, PDFs — private to you and the creator), review
+- Request detail: status timeline, brief, attachments, public or **private** player, **quote card (accept/decline the scope and price before any money moves)**, payment panel, delivery confirmation, one included revision, **learner-initiated refunds**, withdraw, feedback, related requests, share
+- Topic hubs at `/topics` and `/topics/<topic>`: lessons, what people are asking for, and the most-wanted list per subject
+- Explore pages 24 results at a time with real totals, so nothing is silently cut off
 - Public lesson pages: click-to-load YouTube, `VideoObject` JSON-LD, sitemap and robots
 - Dashboard: ready lessons (private ones open privately), in-progress with progress bars, **"Waiting on you"** (pay or confirm), backed requests, closed requests
 - Pricing with live prices and VAT split; checkout; mock card-free payment
@@ -73,10 +76,16 @@ Nothing is required in the environment; everything has a safe default. Copy `.en
 - Queue cockpit: pipeline metrics, weekly capacity, feedback score, filters, search, status control with required decline reasons, internal notes, reply composer
 - Moderation queue: flagged requests with reason, approve → schedule, decline → reason emailed verbatim
 - Library: search what's already filmed, reuse counts, **send an existing lesson to an open request**
-- Payments: collected, VAT inside it, refunds that revoke entitlements, mode switch (`off`/`mock`/`live`)
+- Quotes queue: send (or revise) a scope and price per paid request; nothing is charged until the learner accepts it
+- Payments: collected, VAT inside it, refunds that revoke entitlements, incoming learner refund claims, mode switch (`off`/`mock`/`live`)
+- Health: error log with de-duplication and stack traces, plus outbox, quote, upload and database signals in one place
 - Analytics: funnel, 14-day chart, median days to delivery, helpfulness, returning learners, top searches and **demand gaps**
 - Outbox: every email verbatim (text + HTML), attempts, idempotency key, retry, simulate/clear bounce
 - Support inbox, and settings for VAT, revision window, support email and digest day
+
+**Privacy and mail, stated plainly**
+- `notify_email` gates every lesson email; sign-in links, receipts, quote notices and refund decisions still send, because suppressing them would lock people out or hide their money
+- One-click `/unsubscribe/<token>` — no login, no dark pattern, and it says exactly what still arrives
 
 **Deliberately gated** (see §7 of the plan)
 - Live payments — adapters are written; keys and lawyer-reviewed terms are the gate
@@ -106,6 +115,9 @@ Every production dependency sits behind one module, so the migration to Postgres
 - email templates and delivery → `lib/email.ts`, `lib/notify.ts`
 - payments and providers → `lib/payments.ts`, `lib/providers.ts`, `lib/pricing.ts`
 - private playback → `lib/signed-url.ts`
+- scope, quotes and the payment gate → `lib/quotes.ts`
+- attachments and their safety rules → `lib/uploads.ts`, `lib/upload-rules.ts`
+- error log → `lib/errors.ts`
 
 `IMPLEMENTATION_PLAN.md` §4.2 lists every swap point.
 
@@ -118,10 +130,12 @@ app/            routes: landing, explore, requests, tutorials, watch, dashboard,
                 pricing, checkout, contact, login, auth, admin/*, api/*, legal
 components/     UI + feature components
   ui/           button, badge, field, modal, toast, empty state
-  admin/        queue board, reply form, status control, moderation, reuse, payments, settings
+  admin/        queue board, reply form, status control, moderation, reuse, quotes, payments, health, settings
   account/      profile form, danger zone
 lib/            schema, db, queries, service, actions, auth, notify, email, payments,
-                providers, pricing, signed-url, digest, status, parse, types
+                quotes, uploads, upload-rules, errors, topics, providers, pricing,
+                signed-url, digest, status, parse, types
+tests/          vitest suites for the rules that carry money and access
 data/           local SQLite database (git-ignored, seeded on first run)
 scripts/        reset-db.mjs, smoke.mjs
 ```

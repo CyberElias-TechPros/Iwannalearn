@@ -25,6 +25,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           badges={{
             "/admin": stats.needsDecision || undefined,
             "/admin/moderation": stats.flagged || undefined,
+            "/admin/quotes": stats.awaitingQuotes || undefined,
             "/admin/payments": stats.paidCount || undefined,
             "/admin/support": stats.openSupport || undefined,
             "/admin/outbox": stats.bouncedEmails || undefined,

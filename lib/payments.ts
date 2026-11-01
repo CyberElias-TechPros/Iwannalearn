@@ -1,8 +1,9 @@
-import { getDb, row, randomUUID } from "./db";
+import { getDb, row, rows, randomUUID } from "./db";
 import { PRICING, formatNaira, newReference, paymentsEnabled, taxPortion, type PaidTier } from "./pricing";
 import { notifyUser, queueEmail } from "./notify";
 import { createProviderCheckout } from "./providers";
 import { getSetting } from "./service";
+import { paymentGate } from "./quotes";
 
 /**
  * Payments & entitlements.
@@ -38,6 +39,11 @@ export function createCheckout(userId: string, requestId: string, kind: PaidTier
     return { ok: false, error: `This request is on the ${request.tier} tier, not ${kind}.` };
   }
 
+  // Scope and price must be agreed before money moves. This is the single gate
+  // that makes that promise true — the checkout UI merely reflects it.
+  const gate = paymentGate(requestId);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const existing = row<{ reference: string; amount_kobo: number; tax_kobo: number; status: string }>(
     db.prepare(
       "SELECT reference, amount_kobo, tax_kobo, status FROM payments WHERE request_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
@@ -54,7 +60,7 @@ export function createCheckout(userId: string, requestId: string, kind: PaidTier
     };
   }
 
-  const amountKobo = PRICING[kind].amountKobo;
+  const amountKobo = gate.amountKobo;
   const taxKobo = taxPortion(amountKobo);
   const reference = newReference(request.ref);
   const now = new Date().toISOString();
@@ -116,6 +122,14 @@ export function settle(
   if (payment.status === "paid") return { ok: true, alreadySettled: true, requestId: payment.request_id };
   if (payment.status === "refunded") return { ok: false, error: "This payment was refunded." };
 
+  // Defence in depth: even a replayed or forged webhook cannot settle an amount
+  // the learner never agreed to.
+  const gate = paymentGate(payment.request_id);
+  if (!gate.ok) return { ok: false, error: gate.error };
+  if (Number(payment.amount_kobo) !== gate.amountKobo) {
+    return { ok: false, error: "Payment amount doesn't match the accepted quote." };
+  }
+
   const now = new Date().toISOString();
   db.prepare("UPDATE payments SET status = 'paid', paid_at = ?, provider = ?, updated_at = ? WHERE reference = ?").run(
     now,
@@ -161,6 +175,7 @@ export function settle(
       requestId: payment.request_id,
       template: "receipt",
       idempotencyKey: `receipt:${reference}`,
+      critical: true,
       data: {
         name: user.name ?? "there",
         title: request.title,
@@ -226,6 +241,7 @@ export function refund(
       requestId: payment.request_id,
       template: "status_update",
       idempotencyKey: `refund:${reference}`,
+      critical: true,
       data: {
         name: user.name ?? "there",
         title: request.title,
@@ -254,4 +270,157 @@ export function summaryForRequest(requestId: string) {
     label: formatNaira(Number(payment.amountKobo)),
     taxLabel: formatNaira(Number(payment.taxKobo)),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Learner-initiated refunds                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fairness runs both ways: the creator can refund, and so can the person who
+ * paid. A request is a *claim*, not a refund — the creator resolves it, so a
+ * learner can never unilaterally pull access back mid-delivery, and never gets
+ * ignored either, because every request is visible on both dashboards.
+ */
+
+export type RefundRequest = {
+  id: string;
+  payment_id: string;
+  request_id: string;
+  user_id: string;
+  reason: string;
+  status: "open" | "approved" | "declined";
+  resolution: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+const REFUND_REASONS = [
+  "The scope we agreed isn't what I need any more",
+  "It arrived later than the agreed turnaround",
+  "What was delivered doesn't match the agreed scope",
+  "I no longer need this",
+  "Something else",
+] as const;
+
+export const REFUND_REASON_OPTIONS = REFUND_REASONS;
+
+export function requestRefund(input: {
+  userId: string;
+  requestId: string;
+  reason: string;
+}): { ok: true; id: string } | { ok: false; error: string } {
+  const db = getDb();
+  const payment = row<{ id: string; reference: string; user_id: string; status: string; amount_kobo: number }>(
+    db.prepare("SELECT id, reference, user_id, status, amount_kobo FROM payments WHERE request_id = ? ORDER BY created_at DESC LIMIT 1"),
+    input.requestId,
+  );
+
+  if (!payment) return { ok: false, error: "There's no payment on this request to refund." };
+  if (payment.user_id !== input.userId) return { ok: false, error: "You can only ask about your own payment." };
+  if (payment.status === "refunded") return { ok: false, error: "This payment has already been refunded." };
+  if (payment.status !== "paid") return { ok: false, error: "Nothing has been charged yet, so there's nothing to refund." };
+
+  const reason = input.reason.trim();
+  if (reason.length < 10) return { ok: false, error: "Tell us what went wrong in a sentence or two — it helps us fix it." };
+
+  const open = row<{ id: string }>(
+    db.prepare("SELECT id FROM refund_requests WHERE request_id = ? AND status = 'open'"),
+    input.requestId,
+  );
+  if (open) return { ok: false, error: "You already have a refund request open on this one. We're on it." };
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(
+    "INSERT INTO refund_requests (id, payment_id, request_id, user_id, reason, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
+  ).run(id, payment.id, input.requestId, input.userId, reason.slice(0, 1000), now);
+
+  const request = row<{ title: string; slug: string }>(
+    db.prepare("SELECT title, slug FROM requests WHERE id = ?"),
+    input.requestId,
+  );
+
+  notifyUser({
+    userId: "usr_creator",
+    kind: "payment",
+    title: `Refund requested — ${formatNaira(Number(payment.amount_kobo))}`,
+    body: `${request?.title ?? input.requestId}: ${reason.slice(0, 120)}`,
+    href: "/admin/payments",
+  });
+
+  return { ok: true, id };
+}
+
+export function listRefundRequests(status?: RefundRequest["status"]): RefundRequest[] {
+  const db = getDb();
+  const sql = `
+    SELECT rr.* FROM refund_requests rr
+    ${status ? "WHERE rr.status = ?" : ""}
+    ORDER BY CASE rr.status WHEN 'open' THEN 0 ELSE 1 END, rr.created_at DESC
+  `;
+  return status
+    ? rows<RefundRequest>(db.prepare(sql), status)
+    : rows<RefundRequest>(db.prepare(sql));
+}
+
+export function refundRequestFor(requestId: string): RefundRequest | null {
+  return row<RefundRequest>(
+    getDb().prepare("SELECT * FROM refund_requests WHERE request_id = ? ORDER BY created_at DESC LIMIT 1"),
+    requestId,
+  );
+}
+
+export function resolveRefundRequest(input: {
+  id: string;
+  approve: boolean;
+  note: string;
+}): { ok: boolean; error?: string } {
+  const db = getDb();
+  const claim = row<RefundRequest>(db.prepare("SELECT * FROM refund_requests WHERE id = ?"), input.id);
+  if (!claim) return { ok: false, error: "That refund request doesn't exist." };
+  if (claim.status !== "open") return { ok: false, error: "Already resolved." };
+
+  const now = new Date().toISOString();
+
+  if (input.approve) {
+    const payment = row<{ reference: string }>(db.prepare("SELECT reference FROM payments WHERE id = ?"), claim.payment_id);
+    if (!payment) return { ok: false, error: "The payment behind this request is missing." };
+    const result = refund(payment.reference, `Learner refund: ${claim.reason}`);
+    if (!result.ok) return { ok: false, error: result.error ?? "Refund failed." };
+  }
+
+  db.prepare("UPDATE refund_requests SET status = ?, resolution = ?, resolved_at = ? WHERE id = ?").run(
+    input.approve ? "approved" : "declined",
+    input.note.trim().slice(0, 1000) || null,
+    now,
+    input.id,
+  );
+
+  notifyUser({
+    userId: claim.user_id,
+    kind: "payment",
+    title: input.approve ? "Refund approved" : "Refund request declined",
+    body: input.approve
+      ? "The money is on its way back to your original payment method, and access to the recording is closed."
+      : input.note.trim() || "We couldn't approve this one. Reply to this notification and we'll explain and try again.",
+    href: `/requests/${claim.request_id}`,
+  });
+
+  queueEmail({
+    to: claim.user_id,
+    template: "status_update",
+    idempotencyKey: `refund-claim:${claim.id}`,
+    critical: true,
+    data: {
+      name: "there",
+      heading: input.approve ? "Your refund is approved" : "Your refund request was declined",
+      body: input.approve
+        ? "We've refunded the payment to your original payment method. Access to the recording is closed, and nothing further will be charged."
+        : input.note.trim() || "We couldn't approve this request. Reply and we'll explain — you can always ask again.",
+      href: `/requests/${claim.request_id}`,
+    },
+  });
+
+  return { ok: true };
 }

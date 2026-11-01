@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth";
-import { listLessons, listOpenRequests } from "@/lib/queries";
+import { listLessons, listOpenRequests, countLessons, countOpenRequests } from "@/lib/queries";
 import { ExploreFilters } from "@/components/explore-filters";
 import { LessonCard } from "@/components/lesson-card";
 import { RequestCard } from "@/components/request-card";
@@ -22,23 +22,47 @@ type Search = {
   category?: string;
   level?: string;
   sort?: string;
+  page?: string;
 };
+
+const PAGE_SIZE = 24;
 
 export default async function ExplorePage({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
   const user = await getCurrentUser();
   const tab = params.tab === "requests" ? "requests" : "lessons";
 
+  // Real pagination instead of a silent 48-item ceiling: the old limit cut the
+  // library off with no hint that more existed.
+  const requestedPage = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
+  const sort: "popular" | "oldest" | "newest" | undefined =
+    params.sort === "popular" ? "popular" : params.sort === "oldest" ? "oldest" : params.sort === "newest" ? "newest" : undefined;
+  const filters = { q: params.q, category: params.category, level: params.level, sort };
+  const total = tab === "lessons" ? countLessons(filters) : countOpenRequests(filters);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(requestedPage, pageCount);
+  const offset = (page - 1) * PAGE_SIZE;
+
   const lessons =
-    tab === "lessons"
-      ? listLessons({ q: params.q, category: params.category, level: params.level, limit: 48 })
-      : [];
+    tab === "lessons" ? listLessons({ ...filters, limit: PAGE_SIZE, offset }) : [];
   const requests =
     tab === "requests"
-      ? listOpenRequests({ viewerId: user?.id, q: params.q, category: params.category, level: params.level, limit: 48 })
+      ? listOpenRequests({ viewerId: user?.id, ...filters, limit: PAGE_SIZE, offset })
       : [];
 
-  const count = tab === "lessons" ? lessons.length : requests.length;
+  const count = total;
+  const showing = tab === "lessons" ? lessons.length : requests.length;
+  const pageHref = (nextPage: number) => {
+    const query = new URLSearchParams();
+    if (tab !== "lessons") query.set("tab", tab);
+    if (params.q) query.set("q", params.q);
+    if (params.category) query.set("category", params.category);
+    if (params.level) query.set("level", params.level);
+    if (params.sort) query.set("sort", params.sort);
+    if (nextPage > 1) query.set("page", String(nextPage));
+    const qs = query.toString();
+    return `/explore${qs ? `?${qs}` : ""}`;
+  };
   const tabHref = (nextTab: string) => {
     const query = new URLSearchParams();
     if (nextTab !== "lessons") query.set("tab", nextTab);
@@ -145,6 +169,32 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
           />
         )}
       </div>
+
+      {pageCount > 1 && (
+        <nav className="mt-8 flex flex-wrap items-center justify-center gap-3" aria-label="Pagination">
+          {page > 1 ? (
+            <ButtonLink href={pageHref(page - 1)} variant="secondary" size="sm">
+              ← Previous
+            </ButtonLink>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-line px-3.5 py-1.5 text-[13px] text-ink-3 opacity-50">
+              ← Previous
+            </span>
+          )}
+          <span className="text-[12.5px] tabular-nums text-ink-3">
+            Page {page} of {pageCount} · showing {showing} of {count}
+          </span>
+          {page < pageCount ? (
+            <ButtonLink href={pageHref(page + 1)} variant="secondary" size="sm">
+              Next →
+            </ButtonLink>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-line px-3.5 py-1.5 text-[13px] text-ink-3 opacity-50">
+              Next →
+            </span>
+          )}
+        </nav>
+      )}
 
       <p className="mt-8 text-center text-[13px] text-ink-3">
         Can&apos;t find it?{" "}

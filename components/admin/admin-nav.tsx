@@ -8,10 +8,12 @@ const links = [
   { href: "/admin", label: "Queue" },
   { href: "/admin/moderation", label: "Moderation" },
   { href: "/admin/library", label: "Library" },
+  { href: "/admin/quotes", label: "Quotes" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/outbox", label: "Outbox" },
   { href: "/admin/support", label: "Support" },
+  { href: "/admin/health", label: "Health" },
   { href: "/admin/settings", label: "Settings" },
 ];
 

@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
 import { ButtonLink } from "@/components/ui/button";
+import { useReportError } from "@/components/error-reporter";
 import { Button } from "@/components/ui/button";
 import { Home, Search } from "@/components/icons";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+  useReportError(error, "page");
 
   return (
     <div className="wrap flex max-w-2xl flex-col items-center py-20 text-center">

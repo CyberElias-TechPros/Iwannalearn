@@ -18,6 +18,7 @@ export function PaymentPanel({
   enabled,
   reference,
   revisionState,
+  quoteStatus,
 }: {
   requestId: string;
   tier: PaidTier;
@@ -26,6 +27,7 @@ export function PaymentPanel({
   enabled: boolean;
   reference: string | null;
   revisionState: string;
+  quoteStatus: "none" | "proposed" | "accepted" | "declined" | "withdrawn";
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +58,25 @@ export function PaymentPanel({
         <p className="text-[13px] font-semibold text-warn">Refunded</p>
         <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
           This payment was refunded and access is closed. You can ask again any time.
+        </p>
+      </div>
+    );
+  }
+
+  // No accepted quote, no pay button. The server enforces this too — this is
+  // just the honest interface for it.
+  if (quoteStatus !== "accepted") {
+    return (
+      <div className="rounded-xl border border-line bg-paper-2/50 p-4">
+        <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+          <Lock size={13} /> Payment unlocks after you accept the quote
+        </p>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
+          {quoteStatus === "proposed"
+            ? "Agree the scope above and the exact amount appears here. Accepting doesn't charge you."
+            : quoteStatus === "declined"
+              ? "You declined the quote, so there's nothing to pay. A revised quote can be sent any time."
+              : "Elias is preparing your quote — scope first, then the price. You'll get an email when it's ready."}
         </p>
       </div>
     );

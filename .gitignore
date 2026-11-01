@@ -13,3 +13,4 @@ data/*.db-wal
 data/*.db-shm
 next-env.d.ts
 tsconfig.tsbuildinfo
+data/uploads/

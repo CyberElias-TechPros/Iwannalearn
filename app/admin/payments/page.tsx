@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { listPayments, paymentSummary } from "@/lib/queries";
+import { listRefundRequests, getPayment } from "@/lib/payments";
+import { getDb, row } from "@/lib/db";
+import { RefundClaim } from "@/components/admin/refund-claim";
 import { formatNaira, paymentsMode, PRICING } from "@/lib/pricing";
 import { getSetting } from "@/lib/service";
 import { PaymentsModeForm, RefundButton } from "@/components/admin/payment-controls";
@@ -16,6 +19,32 @@ export default async function AdminPaymentsPage() {
   const summary = paymentSummary();
   const mode = paymentsMode();
   const vat = Number(getSetting("vat_rate", "7.5"));
+
+  // Learner-initiated claims surface first: they are promises with a clock on them.
+  const openClaims = listRefundRequests("open")
+    .map((claim) => {
+      const payment = getPayment(
+        (row<{ reference: string }>(getDb().prepare("SELECT reference FROM payments WHERE id = ?"), claim.payment_id)?.reference) ?? "",
+      );
+      const request = row<{ slug: string; title: string }>(
+        getDb().prepare("SELECT slug, title FROM requests WHERE id = ?"),
+        claim.request_id,
+      );
+      const learner = row<{ name: string | null }>(
+        getDb().prepare("SELECT name FROM users WHERE id = ?"),
+        claim.user_id,
+      );
+      if (!payment || !request) return null;
+      return {
+        id: claim.id,
+        reason: claim.reason,
+        amountLabel: formatNaira(Number(payment.amount_kobo)),
+        learner: learner?.name ?? null,
+        slug: request.slug,
+        createdAt: relativeTime(claim.created_at),
+      };
+    })
+    .filter((claim): claim is NonNullable<typeof claim> => claim !== null);
 
   return (
     <div className="space-y-5">
@@ -48,6 +77,17 @@ export default async function AdminPaymentsPage() {
           <PaymentsModeForm mode={mode} />
         </div>
       </section>
+
+      {openClaims.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-[14px] font-semibold">
+            {openClaims.length} refund request{openClaims.length === 1 ? "" : "s"} waiting on you
+          </h2>
+          {openClaims.map((claim) => (
+            <RefundClaim key={claim.id} {...claim} />
+          ))}
+        </section>
+      )}
 
       {payments.length === 0 ? (
         <EmptyState

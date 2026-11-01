@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getPayment } from "@/lib/payments";
 import { confirmMockPaymentFormAction } from "@/lib/actions";
-import { formatNaira, paymentsMode, PRICING } from "@/lib/pricing";
+import { formatNaira, paymentsMode } from "@/lib/pricing";
 import { getSetting } from "@/lib/service";
 import { getDb, row } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -78,10 +78,10 @@ export default async function CheckoutPage({
             <dl className="space-y-2 text-[13.5px]">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-ink-3">{kind === "private" ? "Private lesson" : "Priority slot"}</dt>
-                <dd className="font-medium">{PRICING[kind].label}</dd>
+                <dd className="font-medium">{formatNaira(Number(payment.amount_kobo))}</dd>
               </div>
               <div className="flex items-center justify-between gap-3 text-[12.5px]">
-                <dt className="text-ink-3">VAT included (7.5%)</dt>
+                <dt className="text-ink-3">of which VAT</dt>
                 <dd className="text-ink-2">{formatNaira(payment.tax_kobo)}</dd>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-line pt-2 text-[16px]">

@@ -289,3 +289,24 @@ export const Alert = (p: IconProps) => (
     <path d="M12 10v4.5M12 17.5v.3" />
   </Icon>
 );
+
+export const Upload = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 16V4" />
+    <path d="m8 8 4-4 4 4" />
+    <path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" />
+  </Icon>
+);
+
+export const Paperclip = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M20 11.5 12.3 19a4.6 4.6 0 0 1-6.5-6.5l7.6-7.6a3.1 3.1 0 0 1 4.4 4.4l-7.6 7.6a1.5 1.5 0 0 1-2.2-2.2l7-7" />
+  </Icon>
+);
+
+export const File = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20V4a.5.5 0 0 1 .5-.5Z" />
+    <path d="M14 3.5V8h4" />
+  </Icon>
+);

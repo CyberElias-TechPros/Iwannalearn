@@ -385,6 +385,7 @@ export function adminStats() {
       row<{ n: number }>(db.prepare("SELECT COALESCE(SUM(amount_kobo), 0) AS n FROM payments WHERE status = 'paid'"))?.n ?? 0,
     ),
     paidCount: one("SELECT COUNT(*) AS n FROM payments WHERE status = 'paid'"),
+    awaitingQuotes: one("SELECT COUNT(*) AS n FROM quotes WHERE status = 'proposed'"),
     bouncedEmails: one("SELECT COUNT(*) AS n FROM notification_logs WHERE status = 'bounced'"),
     openSupport: one("SELECT COUNT(*) AS n FROM support_messages WHERE status = 'open'"),
     capacity: Number(getSetting("weekly_capacity", "4")),

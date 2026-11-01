@@ -115,7 +115,7 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 
 | Capability | State | Evidence / note |
 | --- | --- | --- |
-| Schema, enums, FKs, indexes | ✅ | 19 tables, additive migrations in `lib/schema.ts` |
+| Schema, enums, FKs, indexes | ✅ | 22 tables, additive column migrations in `lib/schema.ts` |
 | Cookie sessions, roles | ✅ | httpOnly, SameSite=Lax, 30 days |
 | Magic-link auth | ✅ | Single-use, 30-minute, rate-limited (5 / 15 min per email); delivery is the same stubbed transport as email |
 | Demo one-tap sign-in | ✅ | Guarded by `DEMO_MODE` |
@@ -143,17 +143,24 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 | Rate limiting | ✅ | Fixed-window per key: login, submit, vote, support |
 | Account export + deletion | ✅ | JSON export; deletion anonymises public history and removes private work |
 | Accessibility | 🔄 | Landmarks, skip link, focus rings, `aria-current`, `aria-live`, labelled icons; screen-reader pass still pending |
-| Automated tests | ✅ | `npm run smoke` — 27 checks: routes, privacy 404, payment/entitlement invariants, idempotency, status enum |
+| Automated tests | ✅ | `npm test` — 39 unit assertions (upload rules, quote gate, signed links, pricing); `npm run smoke` — 41 live checks |
+| Quotes: scope + price agreed before payment | ✅ | `quotes` table; creator proposes, learner accepts/declines; `createCheckout` and `settle` both refuse any amount that isn't an accepted quote |
+| Learner-initiated refunds | ✅ | `refund_requests`; claim → creator approves/declines → refund + revocation + email |
+| Email preferences + unsubscribe | ✅ | `users.notify_email` gates all lesson mail; `critical` mail (sign-in, receipts, quotes) always sends; one-click `/unsubscribe/<token>` |
 | Postgres + RLS | 📋 | Phase B; gate G1 |
-| File uploads | 🔄 | `uploads` table + URL field today; presigned uploads pending |
-| Error monitoring | 📋 | Phase E |
+| File uploads | ✅ | `/api/uploads` with magic-byte validation, 10 MB cap, 5 per request, authenticated download; local disk behind a key so R2/S3 presigned upload is one function |
+| Topic hubs | ✅ | `/topics` + `/topics/[slug]`: lessons, open requests, most-wanted list, JSON-LD, in the sitemap |
+| Pagination | ✅ | `/explore` pages 24 at a time with real totals — no silent truncation |
+| Security headers | ✅ | CSP (no plugins, no cross-origin forms, YouTube-only framing), nosniff, referrer policy, permissions policy, HSTS |
+| Error monitoring | ✅ | `error_logs` with digest de-duplication; boundaries report to `/api/errors`; `/admin/health` shows signals + stack |
 | CAPTCHA | 📋 | Rate limiting only |
 
 ### 3.3 Numbers that are real
 
-- 19 tables; 9 published lessons; 18 seeded requests spanning all seven statuses.
-- 1 paid private commission in the seed (`REQ-1018`, ₦25,000, entitlement granted) so the private path is demonstrable on first run.
-- 27 smoke assertions; 0 type errors.
+- 22 tables; 9 published lessons; 18 seeded requests spanning all seven statuses.
+- 1 paid private commission in the seed (`REQ-1018`, ₦25,000, entitlement granted, backfilled accepted quote) so the private path is demonstrable on first run.
+- 1 private request quoted at ₦35,000 and awaiting the learner's acceptance (`REQ-1013`) so the agree-then-pay path is one click away.
+- 39 unit assertions + 41 smoke assertions; 0 type errors.
 
 ### 3.4 Verify it in three minutes
 

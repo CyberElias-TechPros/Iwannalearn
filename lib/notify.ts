@@ -45,6 +45,12 @@ export type EmailJob = {
   requestId?: string | null;
   idempotencyKey: string;
   userId?: string | null;
+  /**
+   * Transactional mail the user asked for or is contractually owed — a sign-in
+   * link, a receipt. These ignore the "email me about lessons" preference,
+   * because suppressing them would lock someone out or hide their money.
+   */
+  critical?: boolean;
 };
 
 export type DeliveryResult =
@@ -63,10 +69,30 @@ export function queueEmail(job: EmailJob): DeliveryResult {
 
   // Never email a hard-bounced address: the bell already carries the message.
   if (job.userId) {
-    const user = row<{ email_bounced_at: string | null }>(
-      db.prepare("SELECT email_bounced_at FROM users WHERE id = ?"),
+    const user = row<{ email_bounced_at: string | null; notify_email: number; unsubscribe_token: string | null }>(
+      db.prepare("SELECT email_bounced_at, notify_email, unsubscribe_token FROM users WHERE id = ?"),
       job.userId,
     );
+
+    // Respect the preference the user actually set. Silent override would be
+    // exactly the behaviour the account page promises we don't do.
+    if (user && !Number(user.notify_email) && !job.critical) {
+      const id = randomUUID();
+      db.prepare(
+        `INSERT INTO notification_logs (id, provider, channel, status, attempts, last_error, idempotency_key, to_email, subject, created_at, updated_at)
+         VALUES (?, 'stub', 'email', 'suppressed', 0, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        "Email notifications are switched off — delivered in-app only.",
+        job.idempotencyKey,
+        job.to,
+        "",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+      return { status: "suppressed", id, reason: "preference" };
+    }
+
     if (user?.email_bounced_at) {
       const id = randomUUID();
       db.prepare(
@@ -85,7 +111,11 @@ export function queueEmail(job: EmailJob): DeliveryResult {
     }
   }
 
-  const rendered = renderEmail(job.template, job.data);
+  const unsubscribeUrl = job.userId
+    ? `${process.env.SITE_URL ?? "http://localhost:3000"}/unsubscribe/${ensureUnsubscribeToken(job.userId)}`
+    : null;
+
+  const rendered = renderEmail(job.template, { ...job.data, ...(unsubscribeUrl ? { unsubscribeUrl } : {}) });
   const outboxId = randomUUID();
   const now = new Date().toISOString();
 
@@ -128,6 +158,46 @@ export function deliver(outboxId: string): DeliveryResult {
 }
 
 /** Simulates a provider bounce so the failure path is exercisable. */
+/** Lazily mints a stable unsubscribe token, so every email carries a working opt-out. */
+export function ensureUnsubscribeToken(userId: string): string {
+  const db = getDb();
+  const existing = row<{ unsubscribe_token: string | null }>(
+    db.prepare("SELECT unsubscribe_token FROM users WHERE id = ?"),
+    userId,
+  );
+  if (existing?.unsubscribe_token) return existing.unsubscribe_token;
+
+  const token = randomUUID().replace(/-/g, "");
+  db.prepare("UPDATE users SET unsubscribe_token = ? WHERE id = ?").run(token, userId);
+  return token;
+}
+
+export function unsubscribeByToken(
+  token: string,
+): { ok: boolean; email?: string; alreadyOff?: boolean } {
+  const db = getDb();
+  const user = row<{ id: string; email: string; notify_email: number }>(
+    db.prepare("SELECT id, email, notify_email FROM users WHERE unsubscribe_token = ?"),
+    token,
+  );
+  if (!user) return { ok: false };
+
+  if (!Number(user.notify_email)) return { ok: true, email: user.email, alreadyOff: true };
+
+  db.prepare("UPDATE users SET notify_email = 0 WHERE id = ?").run(user.id);
+  db.prepare(
+    "INSERT INTO notification_logs (id, provider, channel, status, attempts, last_error, idempotency_key, to_email, subject, created_at, updated_at) VALUES (?, 'stub', 'email', 'suppressed', 0, ?, ?, ?, '', ?, ?)",
+  ).run(
+    randomUUID(),
+    "Unsubscribed via one-click link.",
+    `unsubscribe:${user.id}`,
+    user.email,
+    new Date().toISOString(),
+    new Date().toISOString(),
+  );
+  return { ok: true, email: user.email };
+}
+
 export function markBounced(outboxId: string, email: string, reason = "Mailbox not found") {
   const db = getDb();
   const now = new Date().toISOString();

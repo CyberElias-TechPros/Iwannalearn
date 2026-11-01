@@ -157,6 +157,27 @@ export default async function PricingPage() {
         </div>
       </section>
 
+      {/* The exact sequence, so nobody is surprised */}
+      <section className="mt-6 surface p-5">
+        <h2 className="text-[15px] font-semibold">How paying for a paid tier actually works</h2>
+        <ol className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { step: "1", title: "You ask", body: "Send the request with as much detail and as many files as you like. Free." },
+            { step: "2", title: "We write the scope", body: "A concrete scope, a price and a turnaround land on your request page and in your inbox." },
+            { step: "3", title: "You accept or decline", body: "Accepting locks the price and charges nothing. Declining is free and gets you a revision, not a silence." },
+            { step: "4", title: "You pay, we film", body: "Checkout opens only after you accept, for the exact agreed amount. Nothing starts before it clears." },
+          ].map((item) => (
+            <li key={item.step} className="rounded-xl border border-line bg-paper-2/40 p-3">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[11.5px] font-semibold text-white">
+                {item.step}
+              </span>
+              <p className="mt-1.5 text-[12.5px] font-semibold">{item.title}</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">{item.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {/* Tax + payment notes */}
       <section className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="surface p-5">

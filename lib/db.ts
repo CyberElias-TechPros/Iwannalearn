@@ -46,6 +46,24 @@ function applyColumnMigrations(db: DatabaseSync) {
   }
 }
 
+/**
+ * Requests that were already paid for before quotes existed keep working:
+ * their payment becomes an accepted quote for the exact amount charged, so the
+ * payment gate has a truthful record for them instead of refusing to settle.
+ */
+function backfillQuotes(db: DatabaseSync) {
+  db.exec(`
+    INSERT INTO quotes (id, request_id, amount_kobo, currency, scope, deliverables, turnaround_days, revisions,
+                        status, proposed_by, proposed_at, accepted_at)
+    SELECT 'qt_backfill_' || p.reference, p.request_id, p.amount_kobo, 'NGN',
+           'Scope as delivered under payment ' || p.reference || '.',
+           NULL, NULL, 0, 'accepted', p.user_id, p.created_at, p.paid_at
+    FROM payments p
+    WHERE p.status = 'paid'
+      AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.request_id = p.request_id)
+  `);
+}
+
 /* ------------------------------------------------------------------ */
 /* Seed                                                                */
 /* ------------------------------------------------------------------ */
@@ -468,6 +486,10 @@ function seed(db: DatabaseSync) {
   const insertEntitlement = db.prepare(`
     INSERT INTO entitlements (id, user_id, request_id, access_type, granted_at) VALUES (?, ?, ?, 'private', ?)
   `);
+  const insertQuote = db.prepare(`
+    INSERT INTO quotes (id, request_id, amount_kobo, currency, scope, deliverables, turnaround_days, revisions, status, proposed_by, proposed_at)
+    VALUES (?, ?, ?, 'NGN', ?, ?, ?, 1, 'proposed', 'usr_creator', ?)
+  `);
   const insertNotificationLog = db.prepare(`
     INSERT INTO notification_logs (id, outbox_id, provider, channel, status, attempts, idempotency_key, to_email, subject, created_at, updated_at)
     VALUES (?, ?, 'stub', 'email', 'delivered', 1, ?, ?, ?, ?, ?)
@@ -565,6 +587,21 @@ function seed(db: DatabaseSync) {
         nowIso(request.payment.paidDaysAgo),
       );
       insertEntitlement.run(randomUUID(), request.owner, id, nowIso(request.payment.paidDaysAgo));
+    }
+
+    // A private request that is quoted but not yet paid: the demo state that
+    // shows scope-agreement working end to end.
+    if (request.tier === "private" && !request.payment) {
+      insertQuote.run(
+        randomUUID(),
+        id,
+        3_500_000,
+        "A private walkthrough of your onboarding tracker: your real data, the formulas you actually need, a template tab your team can reuse, and a two-minute handover video.",
+        "One private video walkthrough, the finished sheet, and a written checklist your team can follow.",
+        9,
+        nowIso(1),
+      );
+      db.prepare("UPDATE requests SET price_kobo = ? WHERE id = ?").run(3_500_000, id);
     }
   }
 
@@ -667,6 +704,8 @@ export function getDb(): DatabaseSync {
 
   const row = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
   if (row.n === 0) seed(db);
+
+  backfillQuotes(db);
 
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
