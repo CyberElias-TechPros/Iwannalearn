@@ -17,9 +17,7 @@ export function LessonCard({
 }) {
   return (
     <article className={cn("surface group flex h-full flex-col overflow-hidden transition hover:shadow-lift", className)}>
-      <Link href={`/tutorials/${lesson.slug}`} className="block" tabIndex={-1} aria-hidden="true">
-        <LessonPoster category={lesson.category} length={lesson.videoLength} title={lesson.videoTitle ?? lesson.title} />
-      </Link>
+      <LessonPoster category={lesson.category} length={lesson.videoLength} title={lesson.videoTitle ?? lesson.title} />
 
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="flex items-center gap-2">

@@ -64,15 +64,13 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
       </header>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div
+        <nav
           className="inline-flex rounded-full border border-line bg-card p-1"
-          role="tablist"
           aria-label="Explore sections"
         >
           <Link
             href={tabHref("lessons")}
-            role="tab"
-            aria-selected={tab === "lessons"}
+            aria-current={tab === "lessons" ? "page" : undefined}
             className={cn(
               "rounded-full px-4 py-2 text-[13.5px] font-medium transition",
               tab === "lessons" ? "bg-brand text-white" : "text-ink-2 hover:text-ink",
@@ -82,8 +80,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
           </Link>
           <Link
             href={tabHref("requests")}
-            role="tab"
-            aria-selected={tab === "requests"}
+            aria-current={tab === "requests" ? "page" : undefined}
             className={cn(
               "rounded-full px-4 py-2 text-[13.5px] font-medium transition",
               tab === "requests" ? "bg-brand text-white" : "text-ink-2 hover:text-ink",
@@ -91,7 +88,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
           >
             Open requests
           </Link>
-        </div>
+        </nav>
 
         <ButtonLink href="/requests/new" size="sm">
           <Plus size={15} /> Ask for a lesson
