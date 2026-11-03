@@ -32,8 +32,12 @@ function connect(): DatabaseSync {
   const dir = path.dirname(DB_PATH);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(DB_PATH);
+  // Next.js can start several workers at once. Wait for the initializing writer
+  // instead of failing the first production build with SQLITE_BUSY.
+  db.exec("PRAGMA busy_timeout = 10000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+  db.exec("PRAGMA synchronous = NORMAL;");
   return db;
 }
 
@@ -699,17 +703,25 @@ export function getDb(): DatabaseSync {
   if (globalForDb.__iwlStore) return globalForDb.__iwlStore.db;
 
   const db = connect();
-  db.exec(SCHEMA);
-  applyColumnMigrations(db);
-  db.exec(EXTRA_INDEXES);
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    db.exec(SCHEMA);
+    applyColumnMigrations(db);
+    db.exec(EXTRA_INDEXES);
 
-  const row = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
-  if (row.n === 0) seed(db);
+    const count = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
+    if (count.n === 0) seed(db);
 
-  backfillQuotes(db);
+    backfillQuotes(db);
 
-  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
-    db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+    for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+      db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+    }
+    db.exec("COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    db.close();
+    throw error;
   }
 
   globalForDb.__iwlStore = { db };
