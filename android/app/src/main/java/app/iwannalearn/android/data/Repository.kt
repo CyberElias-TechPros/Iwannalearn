@@ -35,13 +35,13 @@ class Repository(val api: ApiClient, val preferences: Preferences, val sessions:
     suspend fun requestDetail(slug: String) = api.request("requests/${slug.encodeUrl()}", RequestDetail.serializer())
     suspend fun dashboard() = api.request("dashboard", Dashboard.serializer())
     suspend fun notifications() = api.request("notifications", Notifications.serializer())
-    suspend fun readNotifications(id: String? = null) = api.request("notifications/read", ApiResult.serializer(), "POST", JsonObject(mapOfNotNull(id?.let { "id" to JsonPrimitive(it) })))
+    suspend fun readNotifications(id: String? = null) = api.request("notifications/read", ApiResult.serializer(), "POST", JsonObject(buildMap { id?.let { put("id", JsonPrimitive(it)) } }))
     suspend fun create(draft: RequestDraft) = api.request("requests", CreateResponse.serializer(), "POST", api.json.encodeToJsonElement(RequestDraft.serializer(), draft)).request
     suspend fun action(id: String, action: String, payload: JsonElement = JsonObject(emptyMap())) = api.request("requests/$id/$action", ApiResult.serializer(), "POST", payload)
     suspend fun vote(id: String) = api.request("requests/$id/vote", ApiResult.serializer(), "POST")
     suspend fun checkout(id: String) = api.request("requests/$id/checkout", Checkout.serializer(), "POST")
     suspend fun playback(id: String) = api.request("requests/$id/playback", Playback.serializer())
-    suspend fun track(name: String, requestId: String? = null) = runCatching { api.request("analytics", ApiResult.serializer(), "POST", JsonObject(mapOfNotNull("name" to JsonPrimitive(name), requestId?.let { "requestId" to JsonPrimitive(it) }))) }
+    suspend fun track(name: String, requestId: String? = null) = runCatching { api.request("analytics", ApiResult.serializer(), "POST", JsonObject(buildMap { put("name", JsonPrimitive(name)); requestId?.let { put("requestId", JsonPrimitive(it)) } })) }
     suspend fun support(email: String, subject: String, message: String) = api.request("support", ApiResult.serializer(), "POST", JsonObject(mapOf("email" to JsonPrimitive(email), "subject" to JsonPrimitive(subject), "body" to JsonPrimitive(message))))
     suspend fun admin() = api.request("admin", AdminSnapshot.serializer())
     suspend fun adminAction(path: String, payload: JsonElement = JsonObject(emptyMap())) = api.request("admin/$path", ApiResult.serializer(), "POST", payload)

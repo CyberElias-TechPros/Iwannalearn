@@ -88,6 +88,7 @@ import kotlinx.serialization.json.*
     claimDecision?.let { (claim, approve) -> NoteDialog(if (approve) "Approve this refund?" else "Decline this claim?", if (approve) "Access will be revoked and the payment returned through the provider." else "Give the learner a clear reason.", "Decision note", if (approve) "Approve refund" else "Decline claim", { claimDecision = null }) { note -> vm.act("refunds/${claim.id}/resolve", jsonObject("approve" to JsonPrimitive(approve), "note" to JsonPrimitive(note))); claimDecision = null } }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 private fun LazyListScope.inbox(data: AdminSnapshot, query: String, setQuery: (String) -> Unit, busy: Boolean, vm: AdminViewModel) {
     item { PrimaryTabRow(selectedTabIndex = if (query == "email") 1 else 0) { Tab(selected = query != "email", onClick = { setQuery("") }, text = { Text("Support (${data.support.size})") }); Tab(selected = query == "email", onClick = { setQuery("email") }, text = { Text("Email outbox") }) } }
     if (query == "email") items(data.outbox, key = { it.id }) { message -> AdminCard(message.subject, "${message.toEmail} · ${message.status}") { var expanded by remember { mutableStateOf(false) }; Text(message.body, style = MaterialTheme.typography.bodySmall, maxLines = if (expanded) Int.MAX_VALUE else 3); TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Show less" else "Read message") }; Text("${message.attempts} attempts${message.lastError?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.bodySmall); Row { TextButton(onClick = { vm.act("outbox/${message.id}/retry") }, enabled = !busy) { Text("Retry") }; TextButton(onClick = { vm.act("outbox/${message.id}/bounce") }, enabled = !busy) { Text("Simulate bounce") } } } }
@@ -159,3 +160,5 @@ private fun LazyListScope.insights(data: AdminSnapshot, onExplore: (String) -> U
         ActionButton("Save studio settings", busy, (capacity.toIntOrNull() ?: -1) in 0..50 && (vat.toDoubleOrNull() ?: -1.0) in 0.0..30.0 && (window.toIntOrNull() ?: -1) in 1..90 && email.contains("@")) { save(AdminSettings(capacity.toInt(), vat.toDouble(), window.toInt(), email.trim(), day, mode)) }
     }
 }
+
+private fun jsonObject(vararg pairs: Pair<String, JsonElement>): JsonObject = JsonObject(pairs.toMap())

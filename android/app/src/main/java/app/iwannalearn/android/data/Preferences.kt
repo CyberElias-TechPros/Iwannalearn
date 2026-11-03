@@ -44,7 +44,7 @@ class Preferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             val previous = prefs[key]
             if (previous != null) fresh = ids.filterNot { it in previous }
-            prefs[key] = (previous.orEmpty() + ids).takeLast(500).toSet()
+            prefs[key] = (previous.orEmpty().toList() + ids).takeLast(500).toSet()
         }
         return fresh
     }

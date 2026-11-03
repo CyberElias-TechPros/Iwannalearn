@@ -10,14 +10,33 @@ export function LessonPlayer({
   title,
   category,
   length,
+  requestId,
+  videoProvider,
 }: {
   videoId: string | null;
   videoUrl: string | null;
   title: string;
   category: string;
   length?: string | null;
+  requestId?: string;
+  videoProvider?: string | null;
 }) {
   const [playing, setPlaying] = useState(false);
+  const [source, setSource] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function playDirect() {
+    if (!requestId) return;
+    setLoading(true); setError(null);
+    try { const response = await fetch(`/api/media/${encodeURIComponent(requestId)}`, { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Playback unavailable."); setSource(data.url); } catch (e) { setError(e instanceof Error ? e.message : "Playback unavailable."); } finally { setLoading(false); }
+  }
+
+  if (videoProvider === "direct") {
+    return <div className="relative aspect-video overflow-hidden rounded-2xl border border-line bg-ink/95 shadow-lift">
+      {source ? <video src={source} title={title} controls playsInline className="absolute inset-0 h-full w-full" /> : <div className="absolute inset-0 grid place-items-center p-6 text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-brand text-white"><Play size={24} /></div><p className="mt-4 font-display text-xl font-semibold text-white">{title}</p><button type="button" disabled={loading} onClick={() => void playDirect()} className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{loading ? "Preparing…" : "Play lesson"}</button>{error && <p role="alert" className="mt-3 text-sm text-white">{error}</p>}</div></div>}
+    </div>;
+  }
 
   if (!videoId) {
     return (

@@ -617,3 +617,37 @@ scripts/  reset-db.mjs  smoke.mjs
 **Run eight interviews and file five real requests into the app you now have.**
 
 Everything above is ready for that: the wizard takes 30 seconds, the studio tells you what to film, publishing notifies everyone, and the private path is verifiable end to end. What the build cannot tell you is whether the thing people are stuck on is what you think it is — and that answer changes the roadmap more than any remaining ticket.
+
+
+---
+
+## Native Android delivery
+
+The Android client in `android/` is a separate native Kotlin/Compose application, not a WebView. It uses the existing server as its system of record through `/api/mobile/v1`.
+
+Implemented native surfaces:
+
+- learner home, topics, explore/search, request detail, lesson detail, learning dashboard, notification inbox;
+- native three-step request brief with drafts, file picker, staged uploads, duplicate matching, quote acceptance and owner-only checkout;
+- account/profile, notification preferences, sessions, export/deletion, support and legal screens;
+- creator Studio with queue, quoting, publishing, revisions, refunds, library, moderation, inbox, insights and settings;
+- Media3 playback for direct media, protected private-window flag, YouTube app/browser handoff for public YouTube lessons;
+- encrypted bearer session storage, Room public-metadata cache, DataStore preferences/drafts, WorkManager notification polling;
+- deep links, App Links confirmation handoff, native unit tests and CI APK build.
+
+Backend additions:
+
+- bearer-authenticated mobile API with server-side DTO allowlists and owner/creator authorization;
+- shared web/native request, publishing, status and revision operations;
+- idempotency keys for request intake and replies;
+- bearer upload authentication without falling back to ambient web cookies after a failed bearer token;
+- direct protected-media publishing and an entitlement-checked range-stream proxy;
+- Android login-token handoff and configurable assetlinks endpoint.
+
+Important production boundaries:
+
+- WorkManager polling is not instant push; add FCM if instant notifications are required.
+- Offline support caches metadata, not complete video files or server operations.
+- Public YouTube playback uses the YouTube app/browser because the native YouTube Player API is deprecated.
+- Private delivery requires protected direct HTTPS media and `STREAM_SIGNING_SECRET`/`STREAM_ALLOWED_HOSTS`; unlisted YouTube is rejected for new private lessons.
+- Live payments/email/media hosting, legal review, release signing, Play data-safety/account-deletion requirements and device QA remain deployment gates. The current live refund adapter is not a provider refund API integration.

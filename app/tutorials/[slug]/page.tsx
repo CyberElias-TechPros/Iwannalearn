@@ -92,6 +92,8 @@ export default async function TutorialPage({ params }: { params: Promise<{ slug:
             title={lesson.videoTitle ?? lesson.title}
             category={lesson.category}
             length={lesson.videoLength}
+            requestId={lesson.requestId}
+            videoProvider={lesson.videoProvider}
           />
 
           <section className="surface p-5 md:p-6" aria-labelledby="note-heading">

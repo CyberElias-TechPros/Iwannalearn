@@ -375,6 +375,8 @@ export default async function RequestPage({
                         title={reply.videoTitle ?? request.title}
                         category={request.category}
                         length={reply.videoLength}
+                        requestId={request.id}
+                        videoProvider={reply.videoProvider}
                       />
 
                       <div>
