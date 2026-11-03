@@ -80,7 +80,8 @@ jobs:
         id: apk_blob
         working-directory: .
         shell: bash
-        env: GH_TOKEN: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           import base64, json, os, urllib.request
