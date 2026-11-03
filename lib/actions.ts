@@ -28,10 +28,12 @@ import { acceptQuote, declineQuote, proposeQuote } from "./quotes";
 import { clearErrors } from "./errors";
 import { requestRefund, resolveRefundRequest } from "./payments";
 import { notifyUser, queueEmail, deliver, markBounced, clearBounce } from "./notify";
-import { prepareCheckout, refund, settle } from "./payments";
-import { formatNaira, paymentsEnabled, PRICING, type PaidTier } from "./pricing";
-import { searchEverything } from "./queries";
+import { prepareCheckout, refund, settle, getPayment } from "./payments";
+import { formatNaira, paymentsEnabled, paymentsMode, PRICING, type PaidTier } from "./pricing";
+import { searchEverything, getRequestById } from "./queries";
 import { parseYouTube } from "./parse";
+import { requestSchema, supportSchema, replySchema, fieldErrors } from "./validation";
+import { receiveRequest, publishAndNotify, moveRequest } from "./operations";
 
 export type ActionState = {
   ok?: boolean;
@@ -182,98 +184,14 @@ export async function deleteAccountAction(): Promise<ActionState> {
 /* Requests                                                            */
 /* ------------------------------------------------------------------ */
 
-const requestSchema = z.object({
-  title: z
-    .string()
-    .trim()
-    .min(12, "Give your request a clear, specific title (at least 12 characters).")
-    .max(140, "Keep the title under 140 characters — put the detail in the next step."),
-  goal: z
-    .string()
-    .trim()
-    .min(30, "Describe what you want to be able to do. A sentence or two is perfect.")
-    .max(1200, "That's a lot of detail — try to keep it under 1200 characters."),
-  tried: z.string().trim().max(800, "Keep this under 800 characters.").optional(),
-  category: z.enum(CATEGORIES, { message: "Pick the closest topic." }),
-  level: z.enum(["new", "some", "confident"]),
-  tier: z.enum(["community", "priority", "private"]),
-  contextLink: z
-    .string()
-    .trim()
-    .max(500)
-    .optional()
-    .refine((v) => !v || /^https?:\/\//.test(v), "Paste a full link starting with https://"),
-  deadline: z.string().trim().max(80).optional(),
-});
-
 export async function submitRequestAction(formData: FormData): Promise<ActionState> {
   const user = await getCurrentUser();
   if (!user) return fail("Please sign in first — it takes one tap and keeps your request safe.");
 
-  const limit = rateLimit(`submit:${user.id}`, 10, 60 * 60_000);
-  if (!limit.allowed) {
-    return fail(`That's a lot of requests. Give it ${Math.ceil(limit.retryAfterSeconds / 60)} minutes and try again.`);
-  }
-
-  const parsed = requestSchema.safeParse({
-    title: formData.get("title"),
-    goal: formData.get("goal"),
-    tried: formData.get("tried") || undefined,
-    category: formData.get("category"),
-    level: formData.get("level"),
-    tier: formData.get("tier") || "community",
-    contextLink: formData.get("contextLink") || undefined,
-    deadline: formData.get("deadline") || undefined,
-  });
-
-  if (!parsed.success) {
-    return { error: "Almost there — a couple of fields need a tweak.", fieldErrors: collectFieldErrors(parsed.error) };
-  }
-
-  const created = createRequest(user, parsed.data);
-  const path = `/requests/${created.slug}`;
-
-  // Claim any files staged while filling the wizard. Silently zero if the
-  // learner attached none, which is the common case.
-  const uploadIds = String(formData.get("uploadIds") || "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-  const attached = uploadIds.length > 0 ? attachUploads(created.id, user.id, uploadIds) : 0;
-
-  track("request_submitted", { userId: user.id, requestId: created.id, data: { tier: parsed.data.tier } });
-
-  notifyUser({
-    userId: user.id,
-    requestId: created.id,
-    kind: "request_received",
-    title: "We've got your request ✅",
-    body: created.waitlisted
-      ? "It's on the waitlist — we're at this week's filming capacity. You'll hear when a slot opens."
-      : `“${truncate(parsed.data.title, 70)}” is in the queue${attached ? ` with ${attached} file${attached === 1 ? "" : "s"}` : ""}. We'll notify you the moment there's news.`,
-    href: path,
-  });
-
-  queueEmail({
-    to: user.email,
-    userId: user.id,
-    requestId: created.id,
-    template: created.waitlisted ? "waitlisted" : "request_received",
-    idempotencyKey: `received:${created.id}`,
-    data: {
-      name: user.name ?? "there",
-      title: parsed.data.title,
-      path,
-      capacity: getSettingNumber("weekly_capacity", 4),
-    },
-  });
-
-  revalidatePath("/");
-  revalidatePath("/explore");
-  revalidatePath("/dashboard");
-  revalidatePath("/admin");
-
-  redirect(`${path}?new=1`);
+  const result = receiveRequest(user, formData);
+  if (!result.ok) return { error: result.error, fieldErrors: result.fieldErrors };
+  revalidatePath("/", "layout");
+  redirect(`/requests/${result.created.slug}?new=1`);
 }
 
 export async function toggleUpvoteAction(
@@ -319,162 +237,27 @@ export async function cancelRequestAction(formData: FormData): Promise<ActionSta
 /* Creator: fulfilment                                                 */
 /* ------------------------------------------------------------------ */
 
-const replySchema = z.object({
-  message: z.string().trim().min(10, "Add a short note so the learner knows where to start.").max(2000),
-  videoUrl: z.string().trim().url("Paste the full video link, e.g. https://youtu.be/xxxxxxxxxxx"),
-  videoTitle: z.string().trim().min(4, "Give the lesson a title.").max(140),
-  videoLength: z.string().trim().max(20).optional(),
-  resources: z.string().trim().max(2000).optional(),
-});
-
-type PublishPayload = {
-  message: string;
-  videoUrl: string;
-  videoTitle: string;
-  videoLength?: string;
-  resources?: { label: string; url: string }[];
-  reusedFrom?: string | null;
-};
-
-/** Publishes a lesson and runs the whole notification fan-out. Shared by the composer and library reuse. */
-async function publishAndNotify(actorId: string, requestId: string, payload: PublishPayload): Promise<ActionState> {
-  const parsed = replySchema.safeParse({
-    message: payload.message,
-    videoUrl: payload.videoUrl,
-    videoTitle: payload.videoTitle,
-    videoLength: payload.videoLength,
-    resources: undefined,
-  });
-  if (!parsed.success) return { error: "Check the lesson details.", fieldErrors: collectFieldErrors(parsed.error) };
-
-  const video = parseYouTube(payload.videoUrl);
-  if (!video) {
-    return {
-      error: "That doesn't look like a YouTube link.",
-      fieldErrors: { videoUrl: "Use a youtube.com/watch?v=… or youtu.be/… link." },
-    };
-  }
-
-  const result = publishLesson(actorId, requestId, { ...payload, videoUrl: video.canonical });
-  if (!result.ok) return fail(result.error, result.field ? { [result.field]: "Check this link." } : undefined);
-
-  const isPrivate =
-    row<{ tier: string }>(getDb().prepare("SELECT tier FROM requests WHERE id = ?"), requestId)?.tier === "private";
-
-  for (const person of result.audience) {
-    notifyUser({
-      userId: person.id,
-      requestId,
-      kind: "lesson_ready",
-      title: isPrivate
-        ? person.isOwner
-          ? "Your private lesson is ready 🔒"
-          : "A private lesson you helped request is ready 🔒"
-        : person.isOwner
-          ? "Your lesson is ready 🎉"
-          : "A lesson you backed is ready 🎉",
-      body: `${payload.videoTitle} — made in response to “${truncate(result.title, 60)}”.`,
-      href: isPrivate ? `/requests/${result.slug}` : `/tutorials/${result.slug}`,
-    });
-
-    queueEmail({
-      to: person.email,
-      userId: person.id,
-      requestId,
-      template: "lesson_ready",
-      idempotencyKey: `lesson:${requestId}:${person.id}:${video.id}`,
-      data: {
-        name: person.name ?? "there",
-        title: result.title,
-        videoTitle: payload.videoTitle,
-        note: payload.message,
-        path: isPrivate ? `/requests/${result.slug}` : `/tutorials/${result.slug}`,
-        private: isPrivate ? "1" : "0",
-      },
-    });
-  }
-
-  if (result.promoted > 0) {
-    const promoted = row<{ id: string; slug: string; title: string; created_by: string }>(
-      getDb().prepare(
-        "SELECT id, slug, title, created_by FROM requests WHERE status = 'planned' ORDER BY updated_at DESC LIMIT 1",
-      ),
-    );
-    if (promoted) {
-      const owner = row<{ email: string; name: string | null }>(
-        getDb().prepare("SELECT email, name FROM users WHERE id = ?"),
-        promoted.created_by,
-      );
-      notifyUser({
-        userId: promoted.created_by,
-        requestId: promoted.id,
-        kind: "promoted",
-        title: "You're off the waitlist 🎬",
-        body: `A slot opened — “${truncate(promoted.title, 60)}” is now scheduled for filming.`,
-        href: `/requests/${promoted.slug}`,
-      });
-      if (owner) {
-        queueEmail({
-          to: owner.email,
-          userId: promoted.created_by,
-          requestId: promoted.id,
-          template: "promoted",
-          idempotencyKey: `promoted:${promoted.id}`,
-          data: { name: owner.name ?? "there", title: promoted.title, path: `/requests/${promoted.slug}` },
-        });
-      }
-    }
-  }
-
-  track("lesson_published", { userId: actorId, requestId, data: { private: isPrivate, reused: Boolean(payload.reusedFrom) } });
-
-  revalidatePath("/");
-  revalidatePath("/explore");
-  revalidatePath("/dashboard");
-  revalidatePath("/admin");
-  revalidatePath("/admin/library");
-  revalidatePath(`/requests/${result.slug}`);
-  revalidatePath(`/tutorials/${result.slug}`);
-
-  return {
-    ok: true,
-    message: `Published. ${result.audience.length} ${result.audience.length === 1 ? "person was" : "people were"} notified${result.promoted ? ", and one request left the waitlist" : ""}.`,
-  };
-}
-
 export async function postReplyAction(formData: FormData): Promise<ActionState> {
   const user = await getCurrentUser();
   if (!isCreator(user)) return fail("Only the creator can publish a lesson.");
 
   const requestId = String(formData.get("requestId") || "");
-  const parsed = replySchema.safeParse({
-    message: formData.get("message"),
-    videoUrl: formData.get("videoUrl"),
-    videoTitle: formData.get("videoTitle"),
-    videoLength: formData.get("videoLength") || undefined,
-    resources: formData.get("resources") || undefined,
+  const resources = String(formData.get("resources") || "").split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [label, url] = line.split("|").map((part) => part.trim());
+    return { label: label || url, url: url || line };
   });
-
-  if (!parsed.success) return { error: "Check the lesson details below.", fieldErrors: collectFieldErrors(parsed.error) };
-
-  const resources = (parsed.data.resources ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [label, url] = line.split("|").map((part) => part.trim());
-      return url ? { label: label || url, url } : { label: line, url: line };
-    })
-    .filter((resource) => /^https?:\/\//.test(resource.url));
-
-  return publishAndNotify(user!.id, requestId, {
-    message: parsed.data.message,
-    videoUrl: parsed.data.videoUrl,
-    videoTitle: parsed.data.videoTitle,
-    videoLength: parsed.data.videoLength,
+  const result = publishAndNotify(user.id, requestId, {
+    message: String(formData.get("message") || ""),
+    videoUrl: String(formData.get("videoUrl") || "") || undefined,
+    streamUrl: String(formData.get("streamUrl") || "") || undefined,
+    videoTitle: String(formData.get("videoTitle") || ""),
+    videoLength: String(formData.get("videoLength") || "") || undefined,
     resources,
-    reusedFrom: (formData.get("reusedFrom") as string) || null,
+    reusedFrom: String(formData.get("reusedFrom") || "") || null,
   });
+  if (!result.ok) return { error: result.error, fieldErrors: result.fieldErrors };
+  revalidatePath("/", "layout");
+  return { ok: true, message: result.message };
 }
 
 /** Fulfils a request with an existing lesson instead of filming a new one. */
@@ -501,12 +284,16 @@ export async function reuseLessonAction(formData: FormData): Promise<ActionState
     sourceId,
   );
   if (!source || !source.video_url) return fail("That lesson no longer exists in the library.");
+  const target = getRequestById(requestId, user.id);
+  if (!target) return fail("Request not found.");
+  if (target.visibility === "private") return fail("Public library lessons cannot fulfil a private commission. Deliver a protected video instead.");
 
   return publishAndNotify(user!.id, requestId, {
     message:
       note ||
       `This already answers your question, so I've sent it straight over rather than re-filming it. ${source.message}`,
     videoUrl: source.video_url,
+    streamUrl: row<{ stream_url: string | null }>(getDb().prepare("SELECT stream_url FROM replies WHERE id = ?"), sourceId)?.stream_url ?? undefined,
     videoTitle: source.video_title,
     videoLength: source.video_length ?? undefined,
     resources: source.resources ? JSON.parse(source.resources) : [],
@@ -531,65 +318,10 @@ export async function updateStatusAction(formData: FormData): Promise<ActionStat
   });
   if (!parsed.success) return fail("That status change didn't look right.");
 
-  const result = changeStatus(user!.id, parsed.data.requestId, parsed.data.status as RequestStatus, parsed.data.reason);
-  if (!result.ok) return fail(result.error ?? "Could not move that request.");
-
-  const meta = STATUS_META[parsed.data.status as RequestStatus];
-  const slug = result.slug!;
-  const path = `/requests/${slug}`;
-
-  notifyUser({
-    userId: result.ownerId!,
-    requestId: parsed.data.requestId,
-    kind: "status_change",
-    title: `Update on your request: ${meta.learnerLabel}`,
-    body: `${truncate(result.title!, 70)} — ${meta.blurb}`,
-    href: path,
-  });
-
-  if (parsed.data.status === "declined") {
-    const owner = row<{ email: string; name: string | null }>(
-      getDb().prepare("SELECT email, name FROM users WHERE id = ?"),
-      result.ownerId!,
-    );
-    if (owner) {
-      queueEmail({
-        to: owner.email,
-        userId: result.ownerId!,
-        requestId: parsed.data.requestId,
-        template: "declined",
-        idempotencyKey: `declined:${parsed.data.requestId}:${Date.now()}`,
-        data: { name: owner.name ?? "there", title: result.title!, reason: parsed.data.reason ?? "It's outside what we can teach well." },
-      });
-    }
-  } else if (parsed.data.status === "waitlisted") {
-    const owner = row<{ email: string; name: string | null }>(
-      getDb().prepare("SELECT email, name FROM users WHERE id = ?"),
-      result.ownerId!,
-    );
-    if (owner) {
-      queueEmail({
-        to: owner.email,
-        userId: result.ownerId!,
-        requestId: parsed.data.requestId,
-        template: "waitlisted",
-        idempotencyKey: `waitlisted:${parsed.data.requestId}`,
-        data: {
-          name: owner.name ?? "there",
-          title: result.title!,
-          path,
-          capacity: getSettingNumber("weekly_capacity", 4),
-        },
-      });
-    }
-  }
-
-  if (parsed.data.status === "fulfilled") promoteFromWaitlist(1);
-
-  revalidatePath("/admin");
-  revalidatePath("/dashboard");
-  revalidatePath(path);
-  return { ok: true, message: `Moved to “${meta.learnerLabel}”.` };
+  const result = moveRequest(user.id, parsed.data.requestId, parsed.data.status as RequestStatus, parsed.data.reason);
+  if (!result.ok) return { error: result.error };
+  revalidatePath("/", "layout");
+  return { ok: true, message: result.message };
 }
 
 export async function addInternalNoteAction(formData: FormData): Promise<ActionState> {
@@ -862,6 +594,9 @@ export async function confirmMockPaymentAction(formData: FormData): Promise<Acti
   if (!user) return fail("Sign in first.");
 
   const reference = String(formData.get("reference") || "");
+  const payment = getPayment(reference);
+  if (!payment || payment.user_id !== user.id) return fail("This checkout isn't yours.");
+  if (paymentsMode() !== "mock" || payment.provider !== "mock") return fail("Test settlement is disabled for this payment.");
   const result = settle(reference, { provider: "mock", signal: "user_confirmed" });
   if (!result.ok) return fail(result.error ?? "Payment could not be confirmed.");
 
@@ -951,12 +686,6 @@ export async function trackRequestStartedAction(): Promise<void> {
   const user = await getCurrentUser();
   track("request_started", { userId: user?.id ?? null });
 }
-
-const supportSchema = z.object({
-  email: z.string().trim().email("We need a working email so we can reply."),
-  subject: z.string().trim().min(3, "Give it a subject.").max(140),
-  body: z.string().trim().min(10, "Tell us a little more — a sentence is fine.").max(2000),
-});
 
 export async function supportAction(prevOrData: ActionState | FormData, maybeData?: FormData): Promise<ActionState> {
   const formData = resolveFormData(prevOrData, maybeData);

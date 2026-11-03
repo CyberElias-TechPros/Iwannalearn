@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { requestUser as getCurrentUser } from "@/lib/request-auth";
 import { saveUpload, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { rateLimit } from "@/lib/service";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * Route handlers (not server actions) because the payload is binary.
  */
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser(request);
   if (!user) {
     return NextResponse.json({ ok: false, error: "Sign in to attach files." }, { status: 401 });
   }

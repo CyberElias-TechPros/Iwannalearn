@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { requestUser as getCurrentUser } from "@/lib/request-auth";
 import { getUpload, getObject } from "@/lib/uploads";
 import { getDb, row } from "@/lib/db";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getCurrentUser();
+  const user = await getCurrentUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Sign in to open this file." }, { status: 401 });
 
   const upload = getUpload(id);
@@ -55,9 +55,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 /** Learners can remove a file they attached; the storage object goes with it. */
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getCurrentUser();
+  const user = await getCurrentUser(request);
   if (!user) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
   const { deleteUpload } = await import("@/lib/uploads");

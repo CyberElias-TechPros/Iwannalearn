@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { SCHEMA, COLUMN_MIGRATIONS, DEFAULT_SETTINGS } from "./schema";
+import { SCHEMA, COLUMN_MIGRATIONS, EXTRA_INDEXES, DEFAULT_SETTINGS } from "./schema";
 
 /**
  * Storage layer.
@@ -701,6 +701,7 @@ export function getDb(): DatabaseSync {
   const db = connect();
   db.exec(SCHEMA);
   applyColumnMigrations(db);
+  db.exec(EXTRA_INDEXES);
 
   const row = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
   if (row.n === 0) seed(db);

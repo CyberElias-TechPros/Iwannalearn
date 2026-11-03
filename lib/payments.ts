@@ -408,7 +408,8 @@ export function resolveRefundRequest(input: {
   });
 
   queueEmail({
-    to: claim.user_id,
+    to: row<{ email: string }>(db.prepare("SELECT email FROM users WHERE id = ?"), claim.user_id)!.email,
+    userId: claim.user_id,
     template: "status_update",
     idempotencyKey: `refund-claim:${claim.id}`,
     critical: true,

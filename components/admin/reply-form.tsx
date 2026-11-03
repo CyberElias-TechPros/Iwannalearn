@@ -7,7 +7,7 @@ import { buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Check, Sparkle, Spinner } from "@/components/icons";
 
-export function ReplyForm({ requestId, hasLesson }: { requestId: string; hasLesson: boolean }) {
+export function ReplyForm({ requestId, hasLesson, isPrivate = false }: { requestId: string; hasLesson: boolean; isPrivate?: boolean }) {
   const [state, setState] = useState<ActionState>({});
   const [pending, startTransition] = useTransition();
   const { push } = useToast();
@@ -59,19 +59,22 @@ export function ReplyForm({ requestId, hasLesson }: { requestId: string; hasLess
         </span>
         <div>
           <p className="text-[14px] font-semibold">{hasLesson ? "Replace or add a lesson" : "Attach the lesson"}</p>
-          <p className="text-[12px] text-ink-3">Paste the YouTube link — it publishes and notifies everyone instantly.</p>
+          <p className="text-[12px] text-ink-3">Add the video — publishing notifies everyone who is waiting.</p>
         </div>
       </div>
 
-      <Field label="YouTube link" htmlFor={`videoUrl-${requestId}`} hint="Accepts watch, youtu.be, shorts and live links." error={state.fieldErrors?.videoUrl}>
+      {!isPrivate && <Field label="YouTube link" htmlFor={`videoUrl-${requestId}`} hint="Accepts watch, youtu.be, shorts and live links." error={state.fieldErrors?.videoUrl}>
         <Input
           id={`videoUrl-${requestId}`}
           name="videoUrl"
           type="url"
           placeholder="https://youtu.be/…"
           invalid={Boolean(state.fieldErrors?.videoUrl)}
-          required
+          required={false}
         />
+      </Field>}
+      <Field label={isPrivate ? "Protected video URL" : "Direct video URL (optional)"} htmlFor={`streamUrl-${requestId}`} hint="HTTPS MP4 or HLS. The host must be in STREAM_ALLOWED_HOSTS. Required for private lessons." error={state.fieldErrors?.streamUrl}>
+        <Input id={`streamUrl-${requestId}`} name="streamUrl" type="url" placeholder="https://your-cdn.example/lesson.m3u8" required={isPrivate} />
       </Field>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_7rem]">
