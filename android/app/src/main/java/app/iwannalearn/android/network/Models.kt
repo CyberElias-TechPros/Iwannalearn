@@ -29,7 +29,7 @@ import kotlinx.serialization.json.JsonObject
     val tried: String? = null, val contextLink: String? = null, val deadline: String? = null,
     val declineReason: String? = null, val category: String, val level: String,
     val status: String, val tier: String, val visibility: String, val paymentStatus: String = "none",
-    val revisionState: String = "none, ", val priceKobo: Long? = null, val upvoteCount: Int = 0,
+    val revisionState: String = "none", val priceKobo: Long? = null, val upvoteCount: Int = 0,
     val createdAt: String, val fulfilledAt: String? = null, val deliveryConfirmedAt: String? = null,
     val ownerName: String? = null, val ownerEmail: String? = null,
     val hasLesson: Boolean = false, val lessonTitle: String? = null, val videoId: String? = null,
