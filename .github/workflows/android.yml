@@ -19,6 +19,10 @@ jobs:
     name: Build native Android
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # The APK is also stored as an unattached Git blob so it can be retrieved
+    # through api.github.com when artifact CDN downloads are unavailable.
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: android
@@ -72,6 +76,30 @@ jobs:
         working-directory: .
         run: |
           if grep -REn 'import android\.webkit|WebView\(|BridgeWebView|org\.apache\.cordova|com\.getcapacitor' android/app/src/main/java; then exit 1; fi
+      - name: Store APK as a retrievable Git blob
+        id: apk_blob
+        working-directory: .
+        shell: bash
+        env: GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, urllib.request
+          path = 'android/app/build/outputs/apk/debug/app-debug.apk'
+          data = open(path, 'rb').read()
+          payload = json.dumps({'content': base64.b64encode(data).decode('ascii'), 'encoding': 'base64'}).encode()
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs",
+              data=payload,
+              headers={'Authorization': f"Bearer {os.environ['GH_TOKEN']}", 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'},
+          )
+          with urllib.request.urlopen(request) as response:
+              sha = json.load(response)['sha']
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'sha={sha}\n')
+          print(f'::notice::APK blob {sha} ({len(data)} bytes)')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write(f'APK Git blob: `{sha}` ({len(data)} bytes)\n')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: iwannalearn-android-debug-apk

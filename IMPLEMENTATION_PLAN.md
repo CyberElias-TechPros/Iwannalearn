@@ -143,7 +143,7 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 | Rate limiting | ✅ | Fixed-window per key: login, submit, vote, support |
 | Account export + deletion | ✅ | JSON export; deletion anonymises public history and removes private work |
 | Accessibility | 🔄 | Landmarks, skip link, focus rings, `aria-current`, `aria-live`, labelled icons; screen-reader pass still pending |
-| Automated tests | ✅ | `npm test` — 39 unit assertions (upload rules, quote gate, signed links, pricing); `npm run smoke` — 41 live checks |
+| Automated tests | ✅ | `npm test` — 53 unit assertions (upload rules, quote gate, signed links, pricing); `npm run smoke` — 41 live checks |
 | Quotes: scope + price agreed before payment | ✅ | `quotes` table; creator proposes, learner accepts/declines; `createCheckout` and `settle` both refuse any amount that isn't an accepted quote |
 | Learner-initiated refunds | ✅ | `refund_requests`; claim → creator approves/declines → refund + revocation + email |
 | Email preferences + unsubscribe | ✅ | `users.notify_email` gates all lesson mail; `critical` mail (sign-in, receipts, quotes) always sends; one-click `/unsubscribe/<token>` |
@@ -160,7 +160,7 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 - 22 tables; 9 published lessons; 18 seeded requests spanning all seven statuses.
 - 1 paid private commission in the seed (`REQ-1018`, ₦25,000, entitlement granted, backfilled accepted quote) so the private path is demonstrable on first run.
 - 1 private request quoted at ₦35,000 and awaiting the learner's acceptance (`REQ-1013`) so the agree-then-pay path is one click away.
-- 39 unit assertions + 41 smoke assertions; 0 type errors.
+- 53 unit assertions + 41 smoke assertions; 0 type errors.
 
 ### 3.4 Verify it in three minutes
 
@@ -194,7 +194,7 @@ Then, by hand:
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Framework | Next.js 15 App Router, React 19, TypeScript strict | Server components keep private data on the server; server actions keep forms simple |
+| Framework | Next.js 16 App Router, React 19, TypeScript strict | Server components keep private data on the server; server actions keep forms simple |
 | Styling | Tailwind v4 + CSS variables | Warm paper `#fbf7ef`, ink `#17251f`, brand `#0f6b4f`, accent `#cf7a1b`; Fraunces + Instrument Sans, self-hosted |
 | Data | `node:sqlite` (WAL, foreign keys on) | No service to provision; synchronous, so no N+1 waterfalls |
 | Validation | Zod at every write boundary | One schema per action, messages written for humans |

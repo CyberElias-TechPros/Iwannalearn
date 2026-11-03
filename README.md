@@ -25,7 +25,7 @@ The reconciled, granular plan — what is built, what is gated, what is next and
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm test             # 39 unit checks (quote gate, uploads, signed links, money)
+npm test             # 53 unit checks (quote gate, uploads, signed links, money)
 npm run smoke        # 41 end-to-end checks (second terminal)
 ```
 
@@ -103,7 +103,7 @@ Nothing is required in the environment; everything has a safe default. Copy `.en
 
 | Layer | Choice |
 | --- | --- |
-| Framework | Next.js 15 App Router, React 19, TypeScript strict |
+| Framework | Next.js 16 App Router, React 19, TypeScript strict |
 | Styling | Tailwind v4 with a tokenised theme (`app/globals.css`) |
 | Fonts | Fraunces + Instrument Sans, self-hosted (no external CDN) |
 | Data | SQLite via Node's built-in `node:sqlite` (WAL, FKs on) |
