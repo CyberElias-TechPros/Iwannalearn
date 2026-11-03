@@ -169,14 +169,14 @@ describe("protected native playback", () => {
     const route = `${privateId}/stream${url.search}`;
     const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response("video-bytes", { status: 206, headers: { "Content-Type": "video/mp4", "Content-Range": "bytes 0-10/100" } }));
     vi.stubGlobal("fetch", fetchMock);
-    const stream = await api.handleMobileApi(new Request(access.body.url, { headers: { Authorization: `Bearer ${learnerToken}`, Range: "bytes=0-10" } }), [privateId, "stream"]);
+    const stream = await api.handleMobileApi(new Request(access.body.url, { headers: { Authorization: `Bearer ${learnerToken}`, Range: "bytes=0-10" } }), ["requests", privateId, "stream"]);
     expect(stream.status).toBe(206);
     expect(stream.headers.get("cache-control")).toContain("no-store");
     const upstreamHeaders = fetchMock.mock.calls[0][1] as RequestInit & { headers: Record<string, string> };
     expect(upstreamHeaders.headers.Range).toBe("bytes=0-10");
     expect(upstreamHeaders.headers.Authorization).toBeUndefined();
     vi.unstubAllGlobals();
-    expect((await call("GET", `${privateId}/stream?exp=1&sig=bad`, undefined, learnerToken)).status).toBe(401);
+    expect((await call("GET", `requests/${privateId}/stream?exp=1&sig=bad`, undefined, learnerToken)).status).toBe(401);
   });
   it("revokes playback after a refund", async () => {
     const detail = await call("GET", `requests/${privateSlug}`, undefined, learnerToken);
