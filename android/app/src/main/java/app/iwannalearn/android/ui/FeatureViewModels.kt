@@ -20,7 +20,7 @@ suspend fun attempt(error: MutableStateFlow<String?>, block: suspend () -> Unit)
     try { block() } catch (e: CancellationException) { throw e } catch (e: Exception) { error.value = e.message ?: "Something went wrong. Try again." }
 }
 
-data class ExploreState(val tab: String = "lessons", val query: String = "", val category: String = "", val level: String = "", val sort: String = "newest", val page: Int = 1, val total: Int = 0, val lessons: List<LessonItem> = emptyList(), val requests: List<RequestItem> = emptyList(), val loading: Boolean = false, val more: Boolean = false, val error: String? = null)
+data class ExploreState(val tab: String = "lessons", val query: String = "", val category: String = "", val level: String = "", val sort: String = "newest", val page: Int = 1, val pageSize: Int = 12, val total: Int = 0, val lessons: List<LessonItem> = emptyList(), val requests: List<RequestItem> = emptyList(), val loading: Boolean = false, val more: Boolean = false, val error: String? = null)
 class ExploreViewModel(app: Application) : AndroidViewModel(app) {
     private val c = app.appContainer
     private val _state = MutableStateFlow(ExploreState()); val state = _state.asStateFlow()

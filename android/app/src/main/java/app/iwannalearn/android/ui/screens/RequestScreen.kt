@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -82,8 +84,10 @@ private sealed interface RequestDialog {
                 when (item.paymentStatus) {
                     "paid" -> InfoBox("Paid — ${money(item.priceKobo ?: d.payment?.amountKobo ?: 0)}. Your slot is confirmed.${d.payment?.reference?.let { " Reference: $it" } ?: ""}")
                     "refunded" -> InfoBox("This payment was refunded. Private access is closed.", true)
-                    else -> if (d.quote?.status == "accepted") DetailCard("Ready when you are") { Text("Review the exact amount and terms on the next screen. No card details are collected by this app.", style = MaterialTheme.typography.bodyMedium); ActionButton("Continue to secure checkout", busy, bootstrap.pricing.enabled, vm::startCheckout); if (!bootstrap.pricing.enabled) Text("Payments are switched off on this server. Your request is safe.", style = MaterialTheme.typography.bodySmall) }
-                    else if (d.quote?.status != "proposed") InfoBox("The creator is preparing your scope and price. Nothing is payable until you accept a quote.")
+                    else -> {
+                        if (d.quote?.status == "accepted") DetailCard("Ready when you are") { Text("Review the exact amount and terms on the next screen. No card details are collected by this app.", style = MaterialTheme.typography.bodyMedium); ActionButton("Continue to secure checkout", busy, bootstrap.pricing.enabled, vm::startCheckout); if (!bootstrap.pricing.enabled) Text("Payments are switched off on this server. Your request is safe.", style = MaterialTheme.typography.bodySmall) }
+                        else if (d.quote?.status != "proposed") InfoBox("The creator is preparing your scope and price. Nothing is payable until you accept a quote.")
+                    }
                 }
             }
             if (item.hasLesson) item {

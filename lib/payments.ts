@@ -1,7 +1,7 @@
 import { getDb, row, rows, randomUUID } from "./db";
 import { PRICING, formatNaira, newReference, paymentsEnabled, taxPortion, type PaidTier } from "./pricing";
 import { notifyUser, queueEmail } from "./notify";
-import { createProviderCheckout } from "./providers";
+import { activeProvider, createProviderCheckout } from "./providers";
 import { getSetting } from "./service";
 import { paymentGate } from "./quotes";
 
@@ -67,8 +67,8 @@ export function createCheckout(userId: string, requestId: string, kind: PaidTier
 
   db.prepare(`
     INSERT INTO payments (id, request_id, user_id, provider, reference, kind, amount_kobo, tax_kobo, currency, status, created_at, updated_at)
-    VALUES (?, ?, ?, 'mock', ?, ?, ?, ?, 'NGN', 'pending', ?, ?)
-  `).run(randomUUID(), requestId, userId, reference, kind, amountKobo, taxKobo, now, now);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NGN', 'pending', ?, ?)
+  `).run(randomUUID(), requestId, userId, activeProvider(), reference, kind, amountKobo, taxKobo, now, now);
 
   db.prepare("UPDATE requests SET price_kobo = ?, payment_status = 'pending', updated_at = ? WHERE id = ?").run(
     amountKobo,
@@ -100,6 +100,10 @@ export async function prepareCheckout(
     title: `${kind === "private" ? "Private lesson" : "Priority slot"} — ${created.label}`,
     callbackUrl: `${siteUrl}/requests`,
   });
+
+  if (process.env.PAYMENTS_MODE === "live" && session.provider === "mock") {
+    return { ok: false, error: "The live payment provider is unavailable. No payment was taken; try again shortly." };
+  }
 
   return { ok: true, reference: created.reference, url: session.url };
 }

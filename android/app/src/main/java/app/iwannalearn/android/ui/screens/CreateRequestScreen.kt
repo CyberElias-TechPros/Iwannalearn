@@ -36,7 +36,7 @@ import app.iwannalearn.android.ui.fileSize
     LaunchedEffect(initialTier) { if (initialTier in listOf("community", "priority", "private")) vm.update { it.copy(tier = initialTier) } }
     LaunchedEffect(draft.title) { vm.findMatches() }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::upload) }
-    fun back() { if (draft.step > 0) vm.update { it.copy(step = draft.step - 1) } else onBack() }
+    val back = { if (draft.step > 0) vm.update { it.copy(step = draft.step - 1) } else onBack() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         ScreenTitle("What do you want to learn?", "Step ${draft.step + 1} of 4 · Your draft saves on this device.", back)
         LinearProgressIndicator(progress = { (draft.step + 1) / 4f }, modifier = Modifier.fillMaxWidth(), strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
