@@ -82,7 +82,7 @@ export function publishAndNotify(actorId: string, requestId: string, payload: {
     if (!checked.ok) return { ok: false, error: checked.error, status: 422 };
     payload = { ...payload, streamUrl: checked.url };
   }
-  const result = publishLesson(actorId, requestId, { ...payload, videoUrl: video?.canonical ?? payload.streamUrl! });
+  const result = publishLesson(actorId, requestId, { ...payload, videoUrl: video?.canonical ?? "" });
   if (!result.ok) return { ok: false, error: result.error ?? "Could not update the request.", status: 422 };
   const isPrivate = target.visibility === "private";
   for (const person of result.audience) {

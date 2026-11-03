@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   token       TEXT PRIMARY KEY,
   user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at  TEXT NOT NULL,
-  expires_at  TEXT NOT NULL
+  expires_at  TEXT NOT NULL,
+  client      TEXT NOT NULL DEFAULT 'web'
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
@@ -328,6 +329,7 @@ export const COLUMN_MIGRATIONS: { table: string; column: string; ddl: string }[]
   { table: "requests", column: "client_request_id", ddl: "TEXT" },
   { table: "replies", column: "stream_url", ddl: "TEXT" },
   { table: "login_tokens", column: "client", ddl: "TEXT NOT NULL DEFAULT 'web'" },
+  { table: "sessions", column: "client", ddl: "TEXT NOT NULL DEFAULT 'web'" },
 ];
 
 export const EXTRA_INDEXES = `

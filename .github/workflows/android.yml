@@ -28,12 +28,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android SDK packages
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Unit tests, lint and native APK
-        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee build.log
+      - name: Surface compiler errors in checks
+        if: failure()
+        working-directory: .
+        shell: python
+        run: |
+          import re, pathlib
+          p = pathlib.Path('android/build.log')
+          text = p.read_text() if p.exists() else 'Build failed before Gradle started. Check Android SDK installation.'
+          lines = [line for line in text.splitlines() if line.startswith('e:') or 'FAILURE:' in line or 'What went wrong:' in line or 'SDK location not found' in line]
+          for line in lines[:45]:
+              match = re.search(r'file:///(.*?):(\d+):(\d+)\s*(.*)', line)
+              if match:
+                  file, row, col, message = match.groups()
+                  file = 'android/' + file.split('/android/', 1)[-1]
+                  print(f'::error file={file},line={row},col={col}::{message[:900]}')
+              else:
+                  print('::error::' + line[:900].replace('%', '%25').replace('\n', '%0A'))
+          print('### Build failure\n```\n' + '\n'.join(text.splitlines()[-70:]) + '\n```')
       - name: No embedded web application
         working-directory: .
         run: |

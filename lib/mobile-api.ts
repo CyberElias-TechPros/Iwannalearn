@@ -382,6 +382,7 @@ export async function handleMobileApi(request: Request, segments: string[]): Pro
     // Creator studio is native too. Every admin route repeats the role check server-side.
     if (path[0] === "admin") {
       const creator = requireCreator(request);
+      const id = path[2] ?? "";
       if (route === "GET /admin") return json(adminSnapshot());
       const input = method === "POST" ? await body(request) : {};
       if (method === "POST" && path[1] === "requests" && path[3]) {
