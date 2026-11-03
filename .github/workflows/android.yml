@@ -98,5 +98,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - name: Production build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee web-build.log
       - run: npm test
-      - run: npm run build
+      - name: Surface backend build errors
+        if: failure()
+        shell: python
+        run: |
+          import pathlib
+          p = pathlib.Path('web-build.log')
+          text = p.read_text() if p.exists() else 'Build failed before logging started.'
+          for line in text.splitlines():
+              if 'Error:' in line or 'Failed to compile' in line or 'Type error:' in line or 'ENOMEM' in line or 'ENOSPC' in line:
+                  print('::error::' + line[:900].replace('%', '%25'))
+          print('### Backend build log\n```\n' + '\n'.join(text.splitlines()[-80:]) + '\n```')
