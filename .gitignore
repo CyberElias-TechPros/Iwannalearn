@@ -14,3 +14,6 @@ data/*.db-shm
 next-env.d.ts
 tsconfig.tsbuildinfo
 data/uploads/
+
+# Local CI deliverables (APK binaries are not committed)
+deliverables/
