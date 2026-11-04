@@ -118,7 +118,7 @@ export function countOpenRequests(opts: ListOptions = {}): number {
 const lessonSelect = `
   SELECT r.id AS requestId, r.slug, r.title, r.goal, r.category, r.level,
          p.video_id AS videoId, p.video_url AS videoUrl, p.video_title AS videoTitle,
-         p.video_length AS videoLength, p.message AS cameraMessage, p.resources,
+         p.video_length AS videoLength, p.video_provider AS videoProvider, p.message AS cameraMessage, p.resources,
          r.fulfilled_at AS fulfilledAt, r.upvote_count AS upvoteCount, u.name AS ownerName
     FROM replies p
     JOIN requests r ON r.id = p.request_id
@@ -226,7 +226,7 @@ export function getRequestExtras(requestId: string) {
   const replies = rows<ReplyRow>(
     db.prepare(`
       SELECT p.id, p.kind, p.message, p.video_url AS videoUrl, p.video_id AS videoId,
-             p.video_title AS videoTitle, p.video_length AS videoLength, p.resources,
+             p.video_title AS videoTitle, p.video_length AS videoLength, p.video_provider AS videoProvider, p.resources,
              p.created_at AS createdAt, u.name AS authorName
         FROM replies p JOIN users u ON u.id = p.created_by
        WHERE p.request_id = ? AND p.kind = 'external'

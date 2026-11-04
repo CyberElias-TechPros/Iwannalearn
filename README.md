@@ -2,6 +2,12 @@
 
 > Tell us what you want to learn. We'll help you find it — or make it.
 
+## Native Android app
+
+The repository now includes a **Kotlin / Jetpack Compose Android application** in [`android/`](android/README.md). It is not a WebView or website wrapper: native screens call a versioned backend API for requests, lessons, uploads, quotes, payments, accounts, notifications and creator operations.
+
+Open `android/` in Android Studio, run the backend with `npm run dev`, and use `http://10.0.2.2:3000` as the server address in the Android emulator. See [`android/README.md`](android/README.md) for physical-device setup, APK builds, App Links, protected video, release signing and production gates. The `Android and API` GitHub Actions workflow builds a debug APK and runs native/backend checks.
+
 A request-driven learning platform. A learner describes the exact thing they're stuck on; the product finds an existing lesson, routes them to a similar request they can back, or the creator films a short lesson against that specific goal and notifies them on two channels.
 
 Public lessons are free forever. Priority buys a place in the queue. Private buys a bespoke video of your own files, delivered through signed, expiring links — never published.
@@ -19,7 +25,7 @@ The reconciled, granular plan — what is built, what is gated, what is next and
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm test             # 39 unit checks (quote gate, uploads, signed links, money)
+npm test             # 53 unit checks (quote gate, uploads, signed links, money)
 npm run smoke        # 41 end-to-end checks (second terminal)
 ```
 
@@ -97,7 +103,7 @@ Nothing is required in the environment; everything has a safe default. Copy `.en
 
 | Layer | Choice |
 | --- | --- |
-| Framework | Next.js 15 App Router, React 19, TypeScript strict |
+| Framework | Next.js 16 App Router, React 19, TypeScript strict |
 | Styling | Tailwind v4 with a tokenised theme (`app/globals.css`) |
 | Fonts | Fraunces + Instrument Sans, self-hosted (no external CDN) |
 | Data | SQLite via Node's built-in `node:sqlite` (WAL, FKs on) |

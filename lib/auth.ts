@@ -65,24 +65,32 @@ export function markVerified(userId: string) {
   );
 }
 
-export async function startSession(userId: string) {
-  const db = getDb();
-  const token = randomUUID().replace(/-/g, "");
-  const expires = new Date(Date.now() + SESSION_DAYS * 864e5).toISOString();
-  db.prepare("INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)").run(
-    token,
-    userId,
-    new Date().toISOString(),
-    expires,
-  );
+export function createSession(userId: string, client: "web" | "android" = "web") {
+  const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5).toISOString();
+  getDb().prepare("INSERT INTO sessions (token, user_id, created_at, expires_at, client) VALUES (?, ?, ?, ?, ?)")
+    .run(token, userId, createdAt, expiresAt, client);
+  return { token, expiresAt };
+}
 
+export function userForSessionToken(token: string): SessionUser | null {
+  if (!/^[a-f0-9]{64}$/.test(token)) return null;
+  return row<SessionUser>(getDb().prepare(
+    `SELECT u.id, u.email, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
+  ), token, new Date().toISOString());
+}
+
+export function revokeSessionToken(token: string) {
+  getDb().prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+export async function startSession(userId: string) {
+  const { token, expiresAt } = createSession(userId);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: new Date(expires),
+    httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: new Date(expiresAt),
   });
 }
 
@@ -95,12 +103,12 @@ export async function endSession() {
   }
 }
 
-export function createLoginToken(email: string, name: string | null, next: string): string {
+export function createLoginToken(email: string, name: string | null, next: string, client: "web" | "android" = "web"): string {
   const db = getDb();
   const token = randomUUID().replace(/-/g, "");
   const now = Date.now();
   db.prepare(
-    "INSERT INTO login_tokens (token, email, name, next, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO login_tokens (token, email, name, next, expires_at, created_at, client) VALUES (?, ?, ?, ?, ?, ?, ?)",
   ).run(
     token,
     email.trim().toLowerCase(),
@@ -108,6 +116,7 @@ export function createLoginToken(email: string, name: string | null, next: strin
     next,
     new Date(now + TOKEN_MINUTES * 60_000).toISOString(),
     new Date(now).toISOString(),
+    client,
   );
   // Housekeeping: drop tokens that expired more than a day ago.
   db.prepare("DELETE FROM login_tokens WHERE expires_at < ?").run(new Date(now - 864e5).toISOString());
@@ -115,8 +124,8 @@ export function createLoginToken(email: string, name: string | null, next: strin
 }
 
 export function peekLoginToken(token: string) {
-  return row<{ token: string; email: string; name: string | null; next: string; expires_at: string; consumed_at: string | null }>(
-    getDb().prepare("SELECT token, email, name, next, expires_at, consumed_at FROM login_tokens WHERE token = ?"),
+  return row<{ token: string; email: string; name: string | null; next: string; expires_at: string; consumed_at: string | null; client: string }>(
+    getDb().prepare("SELECT token, email, name, next, expires_at, consumed_at, client FROM login_tokens WHERE token = ?"),
     token,
   );
 }
@@ -134,7 +143,7 @@ export function consumeLoginToken(token: string): { ok: boolean; email?: string;
   return { ok: true, email: record.email, name: record.name, next: record.next };
 }
 
-export function isCreator(user: SessionUser | null): boolean {
+export function isCreator(user: SessionUser | null): user is SessionUser {
   return user?.role === "creator";
 }
 

@@ -97,8 +97,8 @@ export function proposeQuote(input: {
   revisions?: number;
 }): QuoteResult {
   const db = getDb();
-  const request = row<{ id: string; ref: string; title: string; tier: string; created_by: string; payment_status: string }>(
-    db.prepare("SELECT id, ref, title, tier, created_by, payment_status FROM requests WHERE id = ?"),
+  const request = row<{ id: string; ref: string; title: string; tier: string; created_by: string; payment_status: string; owner_email: string; owner_name: string | null }>(
+    db.prepare("SELECT r.id, r.ref, r.title, r.tier, r.created_by, r.payment_status, u.email AS owner_email, u.name AS owner_name FROM requests r JOIN users u ON u.id = r.created_by WHERE r.id = ?"),
     input.requestId,
   );
   if (!request) return { ok: false, error: "That request doesn't exist." };
@@ -175,13 +175,13 @@ export function proposeQuote(input: {
   });
 
   queueEmail({
-    to: request.created_by,
+    to: request.owner_email, userId: request.created_by,
     template: "status_update",
     idempotencyKey: `quote:${quote.id}:${quote.proposed_at}`,
     // A price change is exactly the kind of mail a learner must not miss.
     critical: true,
     data: {
-      name: "there",
+      name: request.owner_name ?? "there",
       heading: `Your quote: ${amount}`,
       body: `Scope for “${request.title}” is agreed and priced at ${amount}. Nothing has been charged. Open your request to accept or decline — if you decline, you owe nothing and can tell us why.`,
       href: `/requests/${request.id}`,

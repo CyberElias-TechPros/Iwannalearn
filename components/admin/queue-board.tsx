@@ -239,7 +239,7 @@ export function QueueBoard({
                         </div>
 
                         <div className="rounded-xl border border-line bg-card p-4">
-                          <ReplyForm requestId={item.id} hasLesson={item.hasLesson} />
+                          <ReplyForm requestId={item.id} hasLesson={item.hasLesson} isPrivate={item.visibility === "private"} />
                         </div>
                       </div>
                     </div>

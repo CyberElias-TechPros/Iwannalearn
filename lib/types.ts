@@ -55,6 +55,7 @@ export type LessonSummary = {
   level: string;
   videoId: string | null;
   videoUrl: string | null;
+  videoProvider: string | null;
   videoTitle: string | null;
   videoLength: string | null;
   cameraMessage: string;
@@ -70,6 +71,7 @@ export type ReplyRow = {
   message: string;
   videoUrl: string | null;
   videoId: string | null;
+  videoProvider: string | null;
   videoTitle: string | null;
   videoLength: string | null;
   resources: string | null;

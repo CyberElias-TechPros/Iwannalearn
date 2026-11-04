@@ -143,7 +143,7 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 | Rate limiting | ✅ | Fixed-window per key: login, submit, vote, support |
 | Account export + deletion | ✅ | JSON export; deletion anonymises public history and removes private work |
 | Accessibility | 🔄 | Landmarks, skip link, focus rings, `aria-current`, `aria-live`, labelled icons; screen-reader pass still pending |
-| Automated tests | ✅ | `npm test` — 39 unit assertions (upload rules, quote gate, signed links, pricing); `npm run smoke` — 41 live checks |
+| Automated tests | ✅ | `npm test` — 53 unit assertions (upload rules, quote gate, signed links, pricing); `npm run smoke` — 41 live checks |
 | Quotes: scope + price agreed before payment | ✅ | `quotes` table; creator proposes, learner accepts/declines; `createCheckout` and `settle` both refuse any amount that isn't an accepted quote |
 | Learner-initiated refunds | ✅ | `refund_requests`; claim → creator approves/declines → refund + revocation + email |
 | Email preferences + unsubscribe | ✅ | `users.notify_email` gates all lesson mail; `critical` mail (sign-in, receipts, quotes) always sends; one-click `/unsubscribe/<token>` |
@@ -160,7 +160,7 @@ A complete, mobile-first product with **19 tables**, a seeded workspace (18 requ
 - 22 tables; 9 published lessons; 18 seeded requests spanning all seven statuses.
 - 1 paid private commission in the seed (`REQ-1018`, ₦25,000, entitlement granted, backfilled accepted quote) so the private path is demonstrable on first run.
 - 1 private request quoted at ₦35,000 and awaiting the learner's acceptance (`REQ-1013`) so the agree-then-pay path is one click away.
-- 39 unit assertions + 41 smoke assertions; 0 type errors.
+- 53 unit assertions + 41 smoke assertions; 0 type errors.
 
 ### 3.4 Verify it in three minutes
 
@@ -194,7 +194,7 @@ Then, by hand:
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Framework | Next.js 15 App Router, React 19, TypeScript strict | Server components keep private data on the server; server actions keep forms simple |
+| Framework | Next.js 16 App Router, React 19, TypeScript strict | Server components keep private data on the server; server actions keep forms simple |
 | Styling | Tailwind v4 + CSS variables | Warm paper `#fbf7ef`, ink `#17251f`, brand `#0f6b4f`, accent `#cf7a1b`; Fraunces + Instrument Sans, self-hosted |
 | Data | `node:sqlite` (WAL, foreign keys on) | No service to provision; synchronous, so no N+1 waterfalls |
 | Validation | Zod at every write boundary | One schema per action, messages written for humans |
@@ -617,3 +617,37 @@ scripts/  reset-db.mjs  smoke.mjs
 **Run eight interviews and file five real requests into the app you now have.**
 
 Everything above is ready for that: the wizard takes 30 seconds, the studio tells you what to film, publishing notifies everyone, and the private path is verifiable end to end. What the build cannot tell you is whether the thing people are stuck on is what you think it is — and that answer changes the roadmap more than any remaining ticket.
+
+
+---
+
+## Native Android delivery
+
+The Android client in `android/` is a separate native Kotlin/Compose application, not a WebView. It uses the existing server as its system of record through `/api/mobile/v1`.
+
+Implemented native surfaces:
+
+- learner home, topics, explore/search, request detail, lesson detail, learning dashboard, notification inbox;
+- native three-step request brief with drafts, file picker, staged uploads, duplicate matching, quote acceptance and owner-only checkout;
+- account/profile, notification preferences, sessions, export/deletion, support and legal screens;
+- creator Studio with queue, quoting, publishing, revisions, refunds, library, moderation, inbox, insights and settings;
+- Media3 playback for direct media, protected private-window flag, YouTube app/browser handoff for public YouTube lessons;
+- encrypted bearer session storage, Room public-metadata cache, DataStore preferences/drafts, WorkManager notification polling;
+- deep links, App Links confirmation handoff, native unit tests and CI APK build.
+
+Backend additions:
+
+- bearer-authenticated mobile API with server-side DTO allowlists and owner/creator authorization;
+- shared web/native request, publishing, status and revision operations;
+- idempotency keys for request intake and replies;
+- bearer upload authentication without falling back to ambient web cookies after a failed bearer token;
+- direct protected-media publishing and an entitlement-checked range-stream proxy;
+- Android login-token handoff and configurable assetlinks endpoint.
+
+Important production boundaries:
+
+- WorkManager polling is not instant push; add FCM if instant notifications are required.
+- Offline support caches metadata, not complete video files or server operations.
+- Public YouTube playback uses the YouTube app/browser because the native YouTube Player API is deprecated.
+- Private delivery requires protected direct HTTPS media and `STREAM_SIGNING_SECRET`/`STREAM_ALLOWED_HOSTS`; unlisted YouTube is rejected for new private lessons.
+- Live payments/email/media hosting, legal review, release signing, Play data-safety/account-deletion requirements and device QA remain deployment gates. The current live refund adapter is not a provider refund API integration.

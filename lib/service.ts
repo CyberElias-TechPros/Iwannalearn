@@ -1,6 +1,7 @@
 import { getDb, row, rows, randomUUID } from "./db";
 import { STATUS_META, OPEN_STATUSES, type RequestStatus } from "./status";
 import { slugify, parseYouTube } from "./parse";
+import { validateStreamUrl } from "./media";
 
 /**
  * Service layer: every write that must be correct lives here, free of Next.js
@@ -52,6 +53,7 @@ export type RequestInput = {
   tier: "community" | "priority" | "private";
   contextLink?: string;
   deadline?: string;
+  clientRequestId?: string;
 };
 
 export type IntakeDecision = {
@@ -140,8 +142,8 @@ export function createRequest(
   db.prepare(`
     INSERT INTO requests (
       id, ref, slug, title, goal, tried, context_link, category, level, visibility, tier,
-      status, deadline, moderation_flag, moderation_note, upvote_count, created_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      status, deadline, moderation_flag, moderation_note, upvote_count, created_by, created_at, updated_at, client_request_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
   `).run(
     id,
     ref,
@@ -161,6 +163,7 @@ export function createRequest(
     user.id,
     now,
     now,
+    input.clientRequestId ?? null,
   );
 
   db.prepare(
@@ -245,6 +248,7 @@ export type PublishPayload = {
   videoLength?: string;
   resources?: { label: string; url: string }[];
   reusedFrom?: string | null;
+  streamUrl?: string;
 };
 
 export type PublishResult =
@@ -254,42 +258,38 @@ export type PublishResult =
       title: string;
       audience: { id: string; email: string; name: string | null; isOwner: boolean }[];
       promoted: number;
+      deliveryId: string;
     }
-  | { ok: false; error: string; field?: "videoUrl" };
+  | { ok: false; error: string; field?: "videoUrl" | "streamUrl" };
 
 export function publishLesson(creatorId: string, requestId: string, payload: PublishPayload, now = new Date().toISOString()): PublishResult {
   const db = getDb();
-  const request = row<{ id: string; slug: string; title: string; created_by: string; status: string }>(
-    db.prepare("SELECT id, slug, title, created_by, status FROM requests WHERE id = ?"),
+  const request = row<{ id: string; slug: string; title: string; created_by: string; status: string; visibility: string }>(
+    db.prepare("SELECT id, slug, title, created_by, status, visibility FROM requests WHERE id = ?"),
     requestId,
   );
   if (!request) return { ok: false, error: "That request no longer exists." };
 
-  const video = parseYouTube(payload.videoUrl);
-  if (!video) {
-    return {
-      ok: false,
-      error: "That doesn't look like a YouTube link.",
-      field: "videoUrl",
-    };
+  const video = payload.videoUrl ? parseYouTube(payload.videoUrl) : null;
+  if (payload.videoUrl && !video) return { ok: false, error: "That doesn't look like a YouTube link.", field: "videoUrl" };
+  if (!video && !payload.streamUrl) return { ok: false, error: "Attach a video first.", field: "videoUrl" };
+  if (request.visibility === "private" && !payload.streamUrl) {
+    return { ok: false, error: "Private lessons need a protected direct video source, not an unlisted YouTube link.", field: "streamUrl" };
+  }
+  if (payload.streamUrl) {
+    const checked = validateStreamUrl(payload.streamUrl);
+    if (!checked.ok) return { ok: false, error: checked.error, field: "videoUrl" };
   }
 
+  const deliveryId = randomUUID();
   db.prepare(`
     INSERT INTO replies (id, request_id, kind, message, video_url, video_id, video_title, video_provider,
-                         video_length, resources, reused_from, created_by, created_at)
-    VALUES (?, ?, 'external', ?, ?, ?, ?, 'youtube', ?, ?, ?, ?, ?)
+                         video_length, resources, reused_from, created_by, created_at, stream_url)
+    VALUES (?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    randomUUID(),
-    requestId,
-    payload.message,
-    video.canonical,
-    video.id,
-    payload.videoTitle,
-    payload.videoLength ?? null,
-    JSON.stringify(payload.resources ?? []),
-    payload.reusedFrom ?? null,
-    creatorId,
-    now,
+    deliveryId, requestId, payload.message, video?.canonical ?? payload.streamUrl!, video?.id ?? null,
+    payload.videoTitle, video ? "youtube" : "direct", payload.videoLength ?? null,
+    JSON.stringify(payload.resources ?? []), payload.reusedFrom ?? null, creatorId, now, payload.streamUrl ?? null,
   );
 
   db.prepare(
@@ -314,7 +314,7 @@ export function publishLesson(creatorId: string, requestId: string, payload: Pub
 
   const promoted = promoteFromWaitlist(1);
 
-  return { ok: true, slug: request.slug, title: request.title, audience, promoted };
+  return { ok: true, slug: request.slug, title: request.title, audience, promoted, deliveryId };
 }
 
 /** When capacity frees up, the oldest waitlisted request takes the slot. */
@@ -348,8 +348,8 @@ export function changeStatus(
   reason?: string,
 ): { ok: boolean; error?: string; slug?: string; title?: string; ownerId?: string; label?: string } {
   const db = getDb();
-  const request = row<{ id: string; slug: string; title: string; created_by: string; status: string }>(
-    db.prepare("SELECT id, slug, title, created_by, status FROM requests WHERE id = ?"),
+  const request = row<{ id: string; slug: string; title: string; created_by: string; status: string; visibility: string }>(
+    db.prepare("SELECT id, slug, title, created_by, status, visibility FROM requests WHERE id = ?"),
     requestId,
   );
   if (!request) return { ok: false, error: "Request not found." };

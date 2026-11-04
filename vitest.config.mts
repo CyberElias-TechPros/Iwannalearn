@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   test: {
@@ -9,6 +10,6 @@ export default defineConfig({
     sequence: { concurrent: false },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, ".") },
+    alias: { "@": path.resolve(fileURLToPath(new URL(".", import.meta.url))) },
   },
 });
